@@ -1,0 +1,10 @@
+Geany Vala Toys is a collection of plugins to made vala development with geany
+more easier.
+
+For now this project, only contains two plugins:
+  - The first one GVT Dock is a plugin to enable docking (with gdl 2.x) in geany
+  - The second one GVT Project is a autotools plugin (mostly inspired from
+    Vala Toys for gEdit http://code.google.com/p/vtg/)
+
+This plugins are made for my personal usage and requirements which can defer
+from usual development usage.
