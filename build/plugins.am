@@ -1,0 +1,15 @@
+include $(top_srcdir)/build/common.am
+
+AM_LDFLAGS = -module -avoid-version -no-undefined
+
+pluginsdir = $(libdir)/geany
+
+INCLUDES += \
+    -I$(top_srcdir)/vapi
+
+VALAFLAGS = \
+    --thread \
+    --vapidir=${top_srcdir}/vapi \
+    --pkg=gtk+-2.0 \
+    --pkg=geany
+

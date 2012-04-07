@@ -1,0 +1,18 @@
+AUTOMAKE_OPTIONS = subdir-objects
+
+INCLUDES = \
+    $(GEANY_VALA_TOYS_CFLAGS) \
+    -I$(top_srcdir)/build
+
+AM_CPPFLAGS = \
+    -DPACKAGE_LOCALE_DIR=\""$(prefix)/$(DATADIRNAME)/locale"\" \
+    -DPACKAGE_SRC_DIR=\""$(srcdir)"\" \
+    -DPACKAGE_DATA_DIR=\""$(datadir)"\"
+
+AM_CFLAGS = \
+    -w \
+    -O3
+
+EXTRA_DIST =
+
+CLEANFILES =

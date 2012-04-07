@@ -1,0 +1,13 @@
+[encoding: UTF-8]
+plugins/dock/gdl/gdl-dock-bar.c
+plugins/dock/gdl/gdl-dock-item-grip.c
+plugins/dock/gdl/gdl-dock-item.c
+plugins/dock/gdl/gdl-dock-layout.c
+plugins/dock/gdl/gdl-dock-master.c
+plugins/dock/gdl/gdl-dock-notebook.c
+plugins/dock/gdl/gdl-dock-object.c
+plugins/dock/gdl/gdl-dock-paned.c
+plugins/dock/gdl/gdl-dock-placeholder.c
+plugins/dock/gdl/gdl-dock-tablabel.c
+plugins/dock/gdl/gdl-dock.c
+plugins/dock/gdl/gdl-switcher.c
