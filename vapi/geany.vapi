@@ -355,14 +355,14 @@ namespace Geany {
     [Compact]
     public class BuildInfo {
         [CCode (cname = "grp")]
-        BuildGroup      group;
+        public BuildGroup      group;
         [CCode (cname = "cmd")]
-        int             command;
-        GLib.Pid        pid;    /* id of the spawned process */
-        string          dir;
-        uint            file_type_id;
-        string          custom_target;
-        int             message_count;
+        public int             command;
+        public GLib.Pid        pid;    /* id of the spawned process */
+        public string          dir;
+        public uint            file_type_id;
+        public string          custom_target;
+        public int             message_count;
     }
     [Compact]
     public class BuildMenuItems

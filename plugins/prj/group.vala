@@ -40,7 +40,7 @@ public class GVT.Group : Node
     public signal void updated ();
 
     // methods
-    public Group (Node inParent, string inName)
+    public Group (Node? inParent, string inName)
     {
         GLib.Object (name: inName, parent: inParent);
 

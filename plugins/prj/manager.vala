@@ -493,6 +493,10 @@ public class GVT.Manager : GLib.Object
                 if (m_GlobalPrefs.build_job > 1)
                     params = "-j%i".printf (m_GlobalPrefs.build_job);
 
+                string working_path = inGroup.path;
+                geany_data.build_info.group = Geany.BuildType.MAKE_ALL.to_build_group ();
+                geany_data.build_info.dir = working_path;
+                geany_data.build_info.file_type_id = Geany.FiletypeID.MAKE;
                 s_CommandLaunched = m_Autotools.build (inGroup.path, params);
             }
         }
@@ -514,6 +518,10 @@ public class GVT.Manager : GLib.Object
                     params = "-j%i".printf (m_GlobalPrefs.build_job);
 
                 params += " " + inTarget.name;
+                string working_path = group.path;
+                geany_data.build_info.group = Geany.BuildType.CUSTOM.to_build_group ();
+                geany_data.build_info.dir = working_path;
+                geany_data.build_info.file_type_id = Geany.FiletypeID.MAKE;
                 s_CommandLaunched = m_Autotools.build (group.path, params);
             }
         }

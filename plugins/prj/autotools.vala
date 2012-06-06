@@ -531,7 +531,7 @@ public class GVT.Autotools : Backend
             }
             project.version = string.joinv (".", vs);
 
-            //Extract AC_SUBST variables
+            // Extract AC_SUBST variables
             reg = new GLib.Regex ("""AC_SUBST\(([^\)]*)\)""");
             if (reg.match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match))
             {
@@ -557,7 +557,7 @@ public class GVT.Autotools : Backend
                 } while (match.next ());
             }
 
-            //Extract AC_CONFIG_FILES
+            // Extract AC_CONFIG_FILES
             reg = new GLib.Regex ("""AC_CONFIG_FILES\(\[([^\\\]]*)\]\)""", RegexCompileFlags.MULTILINE);
             bool res = reg.match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match);
             if (!res)

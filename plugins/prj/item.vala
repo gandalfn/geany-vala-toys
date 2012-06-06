@@ -21,6 +21,7 @@ public abstract class GVT.Item : GLib.Object
 {
     // properties
     private Set<Variable> m_Variables;
+
     // accessors
     public string name             { get; set; }
     public unowned Item? parent    { get; set; }
