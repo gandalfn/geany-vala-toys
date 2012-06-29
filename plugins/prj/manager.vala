@@ -530,42 +530,29 @@ public class GVT.Manager : GLib.Object
         build_target_for_filename (string inFilename)
         {
             bool ret = false;
-            string[] filename= GLib.Path.get_dirname (inFilename).substring (m_Project.path.length + 1).split ("/");
-            unowned Item? item = null;
-            int cpt = filename.length;
+            string filename= inFilename.substring (m_Project.path.length + 1);
+            unowned Item? item = m_Project.find_path (filename);
 
-            if (cpt > 0)
+            if (item != null)
             {
-                do
-                {
-                    string name = GLib.Path.get_basename (inFilename);
-                    for (int i = filename.length - 1; i >= cpt; --i)
-                        name = filename[i] + "/" + name;
-                    item = m_Project.find (name);
-                    cpt--;
-                } while (item == null && cpt >= 0);
+                unowned Item? p = null;
+                for (p = item.parent; p != null && !(p is Target) && !(p is Group); p = p.parent);
 
-                if (item != null)
+                if (item != null && p != null)
                 {
-                    unowned Item? p = null;
-                    for (p = item.parent; p != null && !(p is Target) && !(p is Group); p = p.parent);
-
-                    if (item != null && p != null)
+                    if (p is Target)
                     {
-                        if (p is Target)
-                        {
-                            unowned Target? target = (Target?)p;
-                            debug ("Build %s", target.name);
-                            build_target (target);
-                            ret = true;
-                        }
-                        else if (p is Group)
-                        {
-                            unowned Group? group = (Group?)p;
-                            debug ("Build %s", group.name);
-                            build (group);
-                            ret = true;
-                        }
+                        unowned Target? target = (Target?)p;
+                        debug ("Build %s", target.name);
+                        build_target (target);
+                        ret = true;
+                    }
+                    else if (p is Group)
+                    {
+                        unowned Group? group = (Group?)p;
+                        debug ("Build %s", group.name);
+                        build (group);
+                        ret = true;
                     }
                 }
             }
@@ -603,8 +590,8 @@ public class GVT.Manager : GLib.Object
         public void
         update_tag (string inFilename)
         {
-            string name = GLib.Path.get_basename (inFilename);
-            unowned Item? item = m_Project.find (name);
+            string filename= inFilename.substring (m_Project.path.length + 1);
+            unowned Item? item = m_Project.find_path (filename);
             if (item != null && item is Source)
             {
                 unowned Source? source = (Source?)item;
@@ -620,8 +607,8 @@ public class GVT.Manager : GLib.Object
         public void
         add_tag (string inFilename)
         {
-            string name = GLib.Path.get_basename (inFilename);
-            unowned Item? item = m_Project.find (name);
+            string filename= inFilename.substring (m_Project.path.length + 1);
+            unowned Item? item = m_Project.find_path (filename);
             if (item != null && item is Source)
             {
                 unowned Source? source = (Source?)item;
@@ -637,8 +624,8 @@ public class GVT.Manager : GLib.Object
         public void
         remove_tag (string inFilename)
         {
-            string name = GLib.Path.get_basename (inFilename);
-            unowned Item? item = m_Project.find (name);
+            string filename= inFilename.substring (m_Project.path.length + 1);
+            unowned Item? item = m_Project.find_path (filename);
             if (item != null && item is Source)
             {
                 unowned Source? source = (Source?)item;

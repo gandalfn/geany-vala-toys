@@ -36,6 +36,41 @@ public abstract class GVT.Node : Item
         m_Childs.compare_func = Item.compare;
     }
 
+    private unowned Item?
+    find_path_array (string[] inPath, int inPos)
+        requires (inPos < inPath.length)
+    {
+        unowned Item? item = get (inPath[inPos]);
+
+        if (item == null && inPos < inPath.length - 1)
+        {
+            string f = inPath[inPos];
+            for (int cpt = inPos + 1; cpt < inPath.length; cpt++)
+            {
+                f += "/" + inPath[cpt];
+            }
+            return find (f);
+        }
+
+        if (item != null && inPos < inPath.length - 1)
+        {
+            if (item is Node)
+            {
+                item = ((Node)item).find_path_array (inPath, inPos + 1);
+            }
+            else
+            {
+                item = null;
+            }
+        }
+        else if (item == null && inPos == inPath.length - 1)
+        {
+            item = find (inPath[inPos]);
+        }
+
+        return item;
+    }
+
     public Set.Iterator<Item>
     iterator ()
     {
@@ -77,6 +112,13 @@ public abstract class GVT.Node : Item
         }
 
         return ret;
+    }
+
+    public unowned Item?
+    find_path (string inPath)
+    {
+        string[] path = inPath.split ("/");
+        return find_path_array (path, 0);
     }
 
     public bool
