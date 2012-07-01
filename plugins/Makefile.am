@@ -1,1 +1,1 @@
-SUBDIRS = dock prj
+SUBDIRS = dock prj help

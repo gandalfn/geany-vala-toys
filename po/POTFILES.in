@@ -11,3 +11,10 @@ plugins/dock/gdl/gdl-dock-placeholder.c
 plugins/dock/gdl/gdl-dock-tablabel.c
 plugins/dock/gdl/gdl-dock.c
 plugins/dock/gdl/gdl-switcher.c
+plugins/help/devhelp/dh-assistant-view.c
+plugins/help/devhelp/dh-assistant.c
+plugins/help/devhelp/dh-link.c
+plugins/help/devhelp/dh-parser.c
+plugins/help/devhelp/dh-search.c
+plugins/help/devhelp/dh-window.c
+plugins/help/devhelp/eggfindbar.c

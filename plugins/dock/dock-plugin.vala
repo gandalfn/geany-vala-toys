@@ -330,6 +330,7 @@ public class GVT.DockPlugin : GLib.Object
             int num = notebook.page_num (m_DocumentDock);
             if (num != notebook.get_current_page ())
             {
+                debug("activate editor");
                 notebook.set_current_page (num);
             }
         }
@@ -789,6 +790,8 @@ plugin_set_info (Geany.Plugin.Info inInfo)
 public void
 plugin_init (Geany.Data inData)
 {
+    geany_plugin.module_make_resident ();
+
     // Delay creation to let geany original creation terminate before
     // relayout it
     if (s_IdCreate == 0)

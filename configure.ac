@@ -28,7 +28,10 @@ dnl ****************************************************************************
 GTK_REQUIRED=2.24.0
 LIBXML2_REQUIRED=2.7.8
 VALA_REQUIRED=0.14.0
+WEBKIT_REQUIRED=1.8.1
+LIBWNCK_REQUIRED=2.30.0
 GEANY_REQUIRED=1.22
+GCONF2_REQUIRED=2.30.0
 
 dnl ****************************************************************************
 dnl Check for vala
@@ -49,7 +52,10 @@ dnl ****************************************************************************
 dnl Check for packages
 dnl ****************************************************************************
 PKG_CHECK_MODULES(GEANY_VALA_TOYS, [gtk+-2.0 >= $GTK_REQUIRED
+                                    webkit-1.0 >= $WEBKIT_REQUIRED
+                                    libwnck-1.0 >= $LIBWNCK_REQUIRED
                                     libxml-2.0 >= $LIBXML2_REQUIRED
+                                    gconf-2.0 >= $GCONF2_REQUIRED
                                     geany >= $GEANY_REQUIRED])
 AC_SUBST(GEANY_VALA_TOYS_CFLAGS)
 AC_SUBST(GEANY_VALA_TOYS_LIBS)
@@ -67,9 +73,10 @@ Makefile
 plugins/Makefile
 plugins/dock/Makefile
 plugins/dock/gdl/Makefile
+plugins/help/Makefile
+plugins/help/devhelp/Makefile
 plugins/prj/Makefile
 po/Makefile.in
 ])
 
 AC_OUTPUT
-
