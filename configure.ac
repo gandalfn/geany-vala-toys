@@ -27,7 +27,7 @@ dnl Packages version required
 dnl ****************************************************************************
 GTK_REQUIRED=2.24.0
 LIBXML2_REQUIRED=2.7.8
-VALA_REQUIRED=0.14.0
+VALA_REQUIRED=0.16.0
 WEBKIT_REQUIRED=1.8.1
 LIBWNCK_REQUIRED=2.30.0
 GEANY_REQUIRED=1.22

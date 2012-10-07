@@ -52,14 +52,14 @@ public class GVT.Devhelp : GLib.Object
             toolbar.show ();
             vbox.pack_start (toolbar, false, false);
 
-            m_BackButton = new Gtk.ToolButton.from_stock (Gtk.STOCK_GO_BACK);
+            m_BackButton = new Gtk.ToolButton.from_stock (Gtk.Stock.GO_BACK);
             m_BackButton.show ();
             m_BackButton.clicked.connect (() => {
                 m_DHView.go_back ();
             });
             toolbar.insert (m_BackButton, -1);
 
-            m_ForwardButton = new Gtk.ToolButton.from_stock (Gtk.STOCK_GO_FORWARD);
+            m_ForwardButton = new Gtk.ToolButton.from_stock (Gtk.Stock.GO_FORWARD);
             m_ForwardButton.show ();
             m_BackButton.clicked.connect (() => {
                 m_DHView.go_forward ();
@@ -70,14 +70,14 @@ public class GVT.Devhelp : GLib.Object
             separator.show ();
             toolbar.insert (separator, -1);
 
-            Gtk.ToolButton zoom_in = new Gtk.ToolButton.from_stock (Gtk.STOCK_ZOOM_IN);
+            Gtk.ToolButton zoom_in = new Gtk.ToolButton.from_stock (Gtk.Stock.ZOOM_IN);
             zoom_in.show ();
             zoom_in.clicked.connect (() => {
                 m_DHView.zoom_in ();
             });
             toolbar.insert (zoom_in, -1);
 
-            Gtk.ToolButton zoom_out = new Gtk.ToolButton.from_stock (Gtk.STOCK_ZOOM_OUT);
+            Gtk.ToolButton zoom_out = new Gtk.ToolButton.from_stock (Gtk.Stock.ZOOM_OUT);
             zoom_out.show ();
             zoom_out.clicked.connect (() => {
                 m_DHView.zoom_out ();

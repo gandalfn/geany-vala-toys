@@ -286,6 +286,11 @@ public class GVT.Manager : GLib.Object
         {
             active = false;
             m_TreeStore.remove (m_IterRoot);
+            foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
+            {
+                file.update (true, false, true);
+                geany_data.app.tm_workspace.remove_object (file, false, false);
+            }
         }
 
         private void
@@ -691,7 +696,7 @@ public class GVT.Manager : GLib.Object
         {
             set_title ("Configure");
             set_default_size (400, -1);
-            set_parent (geany_data.main_widgets.window);
+            set_transient_for (geany_data.main_widgets.window);
             set_modal (true);
             add_buttons (Gtk.Stock.CANCEL, Gtk.ResponseType.CANCEL,
                          Gtk.Stock.EXECUTE, Gtk.ResponseType.OK);
@@ -1217,7 +1222,6 @@ public class GVT.Manager : GLib.Object
                                                 Gtk.FileChooserAction.SELECT_FOLDER,
                                                 Gtk.Stock.CANCEL, Gtk.ResponseType.CANCEL,
                                                 Gtk.Stock.OPEN, Gtk.ResponseType.OK);
-
         int response = dialog.run ();
 
         if (response == Gtk.ResponseType.OK)
