@@ -1046,6 +1046,16 @@ namespace Geany {
         public string? get_word_at_pos (int pos, string? wordchars = null);
 
         /**
+         * Passing NULL as wordchars is NOT the same as passing GEANY_WORDCHARS: NULL means
+         * using Scintillas's word boundaries.
+         *
+         * @param wordchars NULL or a string containing characters to match a word.
+         *
+         * @return the current selection or the current word.
+         */
+        public string get_default_selection (bool use_current_word, string? wordchars = null);
+
+        /**
          * Moves the position to //pos//, switching to the document if
          * necessary, setting a marker if //mark// is true.
          *

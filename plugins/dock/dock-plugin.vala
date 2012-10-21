@@ -560,11 +560,17 @@ public class GVT.DockPlugin : GLib.Object
 
             // Remove dock item on child destroy
             inWidget.destroy.connect (() => {
-                var item = m_SideItems.nth_data (nb);
-                m_SideItems.remove (item);
-                unowned Gtk.Widget? menu = item.get_data ("dock-menu");
-                if (menu != null) menu.destroy ();
-                item.destroy ();
+                if (m_SideItems != null)
+                {
+                    var item = m_SideItems.nth_data (nb);
+                    if (item != null)
+                    {
+                        unowned Gtk.Widget? menu = item.get_data ("dock-menu");
+                        if (menu != null) menu.destroy ();
+                        item.destroy ();
+                        m_SideItems.remove (item);
+                    }
+                }
             });
         }
     }
@@ -653,11 +659,17 @@ public class GVT.DockPlugin : GLib.Object
 
             // Remove dock item on child destroy
             inWidget.destroy.connect (() => {
-                var item = m_MessageItems.nth_data (nb);
-                m_MessageItems.remove (item);
-                unowned Gtk.Widget? menu = item.get_data ("dock-menu");
-                if (menu != null) menu.destroy ();
-                item.destroy ();
+                if (m_MessageItems != null)
+                {
+                    var item = m_MessageItems.nth_data (nb);
+                    if (item != null)
+                    {
+                        unowned Gtk.Widget? menu = item.get_data ("dock-menu");
+                        if (menu != null) menu.destroy ();
+                        item.destroy ();
+                        m_MessageItems.remove (item);
+                    }
+                }
             });
         }
     }

@@ -67,9 +67,17 @@ public class GVT.Project : Group
         srcdir.val = path;
         variables.insert (srcdir);
 
+        Variable top_srcdir = new Variable (this, "top_srcdir");
+        top_srcdir.val = path;
+        variables.insert (top_srcdir);
+
         Variable builddir = new Variable (this, "builddir");
         builddir.val = path;
         variables.insert (builddir);
+
+        Variable top_builddir = new Variable (this, "top_builddir");
+        top_builddir.val = path;
+        variables.insert (top_builddir);
     }
 
     public void

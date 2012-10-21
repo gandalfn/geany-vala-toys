@@ -158,6 +158,7 @@ public class GVT.Manager : GLib.Object
             {
                 files += inFilename;
                 current_files = files;
+                save ();
             }
         }
 
@@ -175,6 +176,7 @@ public class GVT.Manager : GLib.Object
             }
 
             current_files = files;
+            save ();
         }
 
         public void
@@ -462,6 +464,154 @@ public class GVT.Manager : GLib.Object
             }
         }
 
+        private void
+        add_search_filename (ref GLib.List<string> inFilenames, Item? inItem)
+        {
+            if (inItem is Group)
+            {
+                Group group = (Group)inItem;
+
+                debug ("Add %s/Makefile.am", group.path);
+                inFilenames.prepend ("%s/Makefile.am".printf (group.path));
+
+                foreach (unowned Item child in group)
+                {
+                    add_search_filename (ref inFilenames, child);
+                }
+            }
+            else if (inItem is Target)
+            {
+                unowned Target target = (Target)inItem;
+
+                foreach (unowned Item child in target)
+                {
+                    add_search_filename (ref inFilenames, child);
+                }
+            }
+            else if (inItem is Source)
+            {
+                unowned Source source = (Source)inItem;
+
+                if (source.filename != null)
+                {
+                    debug ("Add %s", source.filename);
+                    inFilenames.prepend (source.filename);
+                }
+            }
+            else if (inItem is Data)
+            {
+                Data data = (Data)inItem;
+
+                if (data.length == 0)
+                {
+                    if (data.filename != null)
+                    {
+                        debug ("Add %s", data.filename);
+                        inFilenames.prepend (data.filename);
+                    }
+                }
+                else
+                {
+                    debug ("Add %s/Makefile.am", data.path);
+                    inFilenames.prepend ("%s/Makefile.am".printf (data.path));
+                    foreach (unowned Item child in data)
+                    {
+                        add_search_filename (ref inFilenames, child);
+                    }
+                }
+            }
+        }
+
+        private async int
+        search_in_filename (string inFilename, GLib.Regex inRegex)
+        {
+            int nb_matches = 0;
+
+            debug ("Search in %s", inFilename);
+            GLib.File file = GLib.File.new_for_path (inFilename);
+            try
+            {
+                var dis = new DataInputStream (file.read ());
+                string line = null;
+                int num_line = 0;
+                while ((line = yield dis.read_line_async (Priority.DEFAULT)) != null)
+                {
+                    size_t r,w;
+                    string line_utf8 = line.locale_to_utf8 (line.length, out r, out w);
+                    num_line++;
+                    if (line_utf8 != null && inRegex.match (line_utf8))
+                    {
+                        string path = inFilename.substring (m_Project.path.length + 1);
+                        Geany.MessageWindow.msg_add (Geany.MessageWindow.Color.BLACK, -1, null, "%s:%i: %s", path, num_line, line_utf8);
+                        nb_matches++;
+                    }
+                }
+            }
+            catch (Error error)
+            {
+                debug ("Error on search in %s: %s", inFilename, error.message);
+            }
+
+            return nb_matches;
+        }
+
+        public async void
+        search (GLib.Regex inRegex)
+        {
+            Geany.MessageWindow.switch_tab (Geany.MessageWindow.TabID.MESSAGE, true);
+            Geany.MessageWindow.clear_tab (Geany.MessageWindow.TabID.MESSAGE);
+            Geany.MessageWindow.set_messages_dir (m_Project.path);
+
+            // Get filenames of project
+            GLib.List<string> filenames = new GLib.List<string> ();
+            string configure_in = m_Project.path + "/configure.in";
+            string configure_ac = m_Project.path + "/configure.ac";
+
+            if (GLib.FileUtils.test (configure_in, GLib.FileTest.EXISTS))
+                filenames.prepend (configure_in);
+            else if (GLib.FileUtils.test (configure_ac, GLib.FileTest.EXISTS))
+                filenames.prepend (configure_ac);
+
+            foreach (unowned Item? item in m_Project)
+            {
+                add_search_filename (ref filenames, item);
+            }
+
+            filenames.reverse ();
+
+            Geany.Ui.progress_bar_start ("Searching...");
+
+            Geany.MessageWindow.msg_add (Geany.MessageWindow.Color.BLUE, -1, null, "Search \"%s\" in %s...", inRegex.get_pattern (), name);
+
+            // Launch search in each filenames
+            int nb_matches = 0;
+            foreach (string filename in filenames)
+            {
+                nb_matches += yield search_in_filename (filename, inRegex);
+            }
+
+            if (nb_matches == 0)
+                Geany.MessageWindow.msg_add (Geany.MessageWindow.Color.BLUE, -1, null, "No matches found for \"%s\" in %s.", inRegex.get_pattern (), name);
+            else
+                Geany.MessageWindow.msg_add (Geany.MessageWindow.Color.BLUE, -1, null, "Found %i matches for \"%s\" in %s.", nb_matches, inRegex.get_pattern (), name);
+
+            Geany.Ui.progress_bar_stop ();
+        }
+
+        public GLib.SList<string>
+        get_open_files ()
+        {
+            GLib.SList<string> files =  new GLib.SList<string> ();
+
+            foreach (string file in m_Prefs.current_files)
+            {
+                debug ("Open file %s for %s", file, m_Project.name);
+                files.prepend (file);
+            }
+            files.reverse ();
+            return files;
+        }
+
         public void
         configure (string inParams, bool inRegenerate)
         {
@@ -641,6 +791,100 @@ public class GVT.Manager : GLib.Object
                     geany_data.app.tm_workspace.remove_object (m_TmFiles[num - 1], false, false);
                 }
             }
+        }
+
+        public void
+        add_open_file (string inFilename)
+        {
+            m_Prefs.add_file (inFilename);
+        }
+
+        public void
+        remove_open_file (string inFilename)
+        {
+            m_Prefs.remove_file (inFilename);
+        }
+    }
+
+    private class SearchDialog : Gtk.Dialog
+    {
+        // properties
+        private unowned Prj?           m_Prj;
+        private unowned Gtk.Entry?     m_Entry;
+        private GLib.RegexCompileFlags m_Flags = GLib.RegexCompileFlags.CASELESS;
+
+        // methods
+        construct
+        {
+            add_buttons (Gtk.Stock.CLOSE, Gtk.ResponseType.CANCEL,
+                         Gtk.Stock.FIND, Gtk.ResponseType.ACCEPT);
+            set_default_response (Gtk.ResponseType.ACCEPT);
+
+            var vbox = new Geany.Ui.DialogVBox (this);
+            set_name("GVTProjectDialogSearch");
+            vbox.set_spacing(9);
+
+            var label = new Gtk.Label.with_mnemonic ("_Search for:");
+            label.set_alignment (0, 0.5f);
+
+            var entry = new Gtk.ComboBoxEntry.text ();
+
+            m_Entry = entry.get_child () as Gtk.Entry;
+            m_Entry.set_activates_default (true);
+            Geany.Ui.entry_add_clear_icon (m_Entry);
+            label.set_mnemonic_widget (m_Entry);
+            m_Entry.set_width_chars (50);
+            Geany.Ui.hookup_widget (this, entry, "entry");
+
+            var sbox = new Gtk.HBox (false, 6);
+            sbox.pack_start(label, false, false, 0);
+            sbox.pack_start(entry, true, true, 0);
+            vbox.pack_start(sbox, true, false, 0);
+
+            var checkbox1 = new Gtk.CheckButton.with_mnemonic ("C_ase sensitive");
+            Geany.Ui.hookup_widget (this, checkbox1, "check_case");
+            checkbox1.set_focus_on_click (false);
+            checkbox1.toggled.connect (() => {
+                if (checkbox1.active)
+                    m_Flags &= ~GLib.RegexCompileFlags.CASELESS;
+                else
+                    m_Flags |= GLib.RegexCompileFlags.CASELESS;
+            });
+            sbox.add (checkbox1);
+
+            vbox.add (sbox);
+        }
+
+        public SearchDialog (Prj inPrj, string? inSelection)
+        {
+            m_Prj = inPrj;
+            set_title ("Find in project %s".printf (inPrj.name));
+            set_transient_for (geany_data.main_widgets.window);
+            destroy_with_parent = true;
+            if (inSelection != null)
+            {
+                m_Entry.set_text (inSelection);
+            }
+        }
+
+        public void
+        main ()
+        {
+            show_all ();
+            Gtk.ResponseType response = (Gtk.ResponseType)run ();
+            if (response == Gtk.ResponseType.ACCEPT && m_Entry.get_text ().length > 0)
+            {
+                try
+                {
+                    GLib.Regex regex = new GLib.Regex (m_Entry.get_text (), m_Flags);
+                    m_Prj.search (regex);
+                }
+                catch (GLib.Error err)
+                {
+                    debug ("Error on search: %s", err.message);
+                }
+            }
+            hide ();
         }
     }
 
@@ -824,16 +1068,20 @@ public class GVT.Manager : GLib.Object
     on_document_open (GLib.Object inObject, Geany.Document inDocument)
     {
         string filename = inDocument.file_name;
-        foreach (unowned Prj? prj in m_Projects)
+        if (filename != null)
         {
-            if (filename.has_prefix (prj.path + "/"))
+            foreach (unowned Prj? prj in m_Projects)
             {
-                prj.active = true;
-                prj.remove_tag (filename);
-            }
-            else
-            {
-                prj.active = false;
+                if (filename.has_prefix (prj.path + "/"))
+                {
+                    prj.active = true;
+                    prj.remove_tag (filename);
+                    prj.add_open_file (filename);
+                }
+                else
+                {
+                    prj.active = false;
+                }
             }
         }
     }
@@ -843,17 +1091,21 @@ public class GVT.Manager : GLib.Object
     on_document_close (GLib.Object inObject, Geany.Document inDocument)
     {
         string filename = inDocument.file_name;
-        foreach (unowned Prj? prj in m_Projects)
+        if (filename != null)
         {
-            if (filename.has_prefix (prj.path + "/"))
+            foreach (unowned Prj? prj in m_Projects)
             {
-                unowned Geany.Document? document = Geany.Document.get_current ();
-                if (document == null || document.file_name == filename || !document.file_name.has_prefix (prj.path))
+                if (filename.has_prefix (prj.path + "/"))
                 {
-                    prj.active = false;
-                    prj.add_tag (filename);
+                    unowned Geany.Document? document = Geany.Document.get_current ();
+                    if (document == null || document.file_name == filename || !document.file_name.has_prefix (prj.path))
+                    {
+                        prj.active = false;
+                        prj.add_tag (filename);
+                    }
+                    prj.remove_open_file (filename);
+                    break;
                 }
-                break;
             }
         }
     }
@@ -863,12 +1115,15 @@ public class GVT.Manager : GLib.Object
     on_document_save (GLib.Object inObject, Geany.Document inDocument)
     {
         string filename = inDocument.file_name;
-        foreach (unowned Prj? prj in m_Projects)
+        if (filename != null)
         {
-            if (filename.has_prefix (prj.path + "/"))
+            foreach (unowned Prj? prj in m_Projects)
             {
-                prj.update_tag (filename);
-                break;
+                if (filename.has_prefix (prj.path + "/"))
+                {
+                    prj.update_tag (filename);
+                    break;
+                }
             }
         }
     }
@@ -878,16 +1133,19 @@ public class GVT.Manager : GLib.Object
     on_document_activate (GLib.Object inObject, Geany.Document inDocument)
     {
         string filename = inDocument.file_name;
-        foreach (unowned Prj? prj in m_Projects)
+        if (filename != null)
         {
-            if (filename.has_prefix (prj.path + "/"))
+            foreach (unowned Prj? prj in m_Projects)
             {
-                prj.active = true;
-                prj.remove_tag (filename);
-            }
-            else
-            {
-                prj.active = false;
+                if (filename.has_prefix (prj.path + "/"))
+                {
+                    prj.active = true;
+                    prj.remove_tag (filename);
+                }
+                else
+                {
+                    prj.active = false;
+                }
             }
         }
     }
@@ -908,8 +1166,10 @@ public class GVT.Manager : GLib.Object
                 unowned Prj? prj = m_Projects.search <string> (item.name, (k, v) => {
                     return GLib.strcmp (k.project_name, v);
                 });
+                GLib.SList<string> files = null;
                 if (prj != null)
                 {
+                    files = prj.get_open_files ();
                     m_Projects.remove (prj);
                     prj.unref ();
                 }
@@ -922,6 +1182,16 @@ public class GVT.Manager : GLib.Object
                 c += null;
                 m_GlobalPrefs.current_projects = c;
                 m_GlobalPrefs.save ();
+
+                if (files != null)
+                {
+                    foreach (string file in files)
+                    {
+                        unowned Geany.Document? doc = Geany.Document.find_by_filename (file);
+                        if (doc != null)
+                            doc.close ();
+                    }
+                }
             }
         }
     }
@@ -1086,10 +1356,26 @@ public class GVT.Manager : GLib.Object
         if (inNode is Project)
         {
             unowned Project project = (Project)inNode;
+            unowned Prj? prj = m_Projects.search <string> (project.name, (k, v) => {
+                return GLib.strcmp (k.project_name, v);
+            });
 
             var separator1 = new Gtk.SeparatorMenuItem ();
             separator1.show ();
             menu.add (separator1);
+
+            var menu_search = new Gtk.MenuItem.with_label ("Search");
+            menu_search.show ();
+            menu.add (menu_search);
+
+            menu_search.activate.connect (() => {
+                SearchDialog dialog = new SearchDialog (prj, null);
+                dialog.main ();
+            });
+
+            var separator2 = new Gtk.SeparatorMenuItem ();
+            separator2.show ();
+            menu.add (separator2);
 
             var menu_execute = new Gtk.MenuItem.with_label ("Launch Diff Tool");
             menu_execute.show ();
@@ -1152,7 +1438,8 @@ public class GVT.Manager : GLib.Object
         recent_chooser_menu.item_activated.connect (() => {
             try
             {
-                m_Projects.insert (new Prj (this, Filename.from_uri (recent_chooser_menu.get_current_uri ())));
+                Prj prj = new Prj (this, Filename.from_uri (recent_chooser_menu.get_current_uri ()));
+                m_Projects.insert (prj);
                 string[] c = {};
                 foreach (unowned Prj p in m_Projects)
                 {
@@ -1161,6 +1448,12 @@ public class GVT.Manager : GLib.Object
                 c += null;
                 m_GlobalPrefs.current_projects = c;
                 m_GlobalPrefs.save ();
+
+                GLib.SList<string> files = prj.get_open_files ();
+                if (files != null)
+                {
+                    Geany.Document.open_files (files);
+                }
             }
             catch (GLib.Error err)
             {
@@ -1226,7 +1519,8 @@ public class GVT.Manager : GLib.Object
 
         if (response == Gtk.ResponseType.OK)
         {
-            m_Projects.insert (new Prj (this, dialog.get_filename ()));
+            Prj prj = new Prj (this, dialog.get_filename ());
+            m_Projects.insert (prj);
             string[] c = {};
             foreach (unowned Prj p in m_Projects)
             {
@@ -1235,6 +1529,12 @@ public class GVT.Manager : GLib.Object
             c += null;
             m_GlobalPrefs.current_projects = c;
             m_GlobalPrefs.save ();
+
+            GLib.SList<string> files = prj.get_open_files ();
+            if (files != null)
+            {
+                Geany.Document.open_files (files);
+            }
         }
 
         dialog.destroy ();
@@ -1396,8 +1696,12 @@ public class GVT.Manager : GLib.Object
             {
                 if (filename.has_prefix (prj.path + "/"))
                 {
+                    string? sel = document.editor.get_default_selection (true);
+
                     debug ("Launch find in project %s", prj.name);
-                    Geany.Search.show_find_in_files_dialog (prj.path);
+                    //Geany.Search.show_find_in_files_dialog (prj.path);
+                    SearchDialog dialog = new SearchDialog (prj, sel);
+                    dialog.main ();
                     break;
                 }
             }
