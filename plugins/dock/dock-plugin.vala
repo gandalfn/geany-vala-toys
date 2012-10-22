@@ -439,8 +439,7 @@ public class GVT.DockPlugin : GLib.Object
         int nb_pages = geany_data.main_widgets.sidebar_notebook.get_n_pages ();
         for (int cpt = 0; cpt < nb_pages; ++cpt)
         {
-            var item =  geany_data.main_widgets.sidebar_notebook.get_nth_page (0);
-            item.destroy ();
+            geany_data.main_widgets.sidebar_notebook.remove_page (0);
         }
 
         // Restore child in side items
@@ -487,8 +486,7 @@ public class GVT.DockPlugin : GLib.Object
         int nb_pages = geany_data.main_widgets.message_window_notebook.get_n_pages ();
         for (int cpt = 0; cpt < nb_pages; ++cpt)
         {
-            var item =  geany_data.main_widgets.message_window_notebook.get_nth_page (0);
-            item.destroy ();
+            geany_data.main_widgets.message_window_notebook.remove_page (0);
         }
 
         // Restore child in message items
