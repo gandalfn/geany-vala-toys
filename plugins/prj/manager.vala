@@ -275,11 +275,6 @@ public class GVT.Manager : GLib.Object
             m_TreeStore.append (out m_IterRoot, null);
             m_TreeStore.set (m_IterRoot, 0, icon, 1, name, 2, m_Project);
 
-            foreach (unowned Item? item in m_Project)
-            {
-                add_item (m_IterRoot, item);
-            }
-
             // Add to recent project openned
             add_recent_project ();
         }
@@ -317,22 +312,25 @@ public class GVT.Manager : GLib.Object
             }
         }
 
-        private void
+        private async void
         add_item (Gtk.TreeIter inIter, Item? inItem)
         {
             if (inItem is Group)
             {
                 Group group = (Group)inItem;
-                Gdk.Pixbuf icon = Manager.pixbuf_from_stock (Gtk.Stock.DIRECTORY);
                 Gtk.TreeIter iter;
 
+                debug ("Add group %s in %s", inItem.name, name);
                 m_TreeStore.append (out iter, inIter);
-                m_TreeStore.set (iter, 0, icon, 1, inItem.name, 2, inItem);
+                m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, inItem.name, 2, inItem);
 
                 foreach (unowned Item child in group)
                 {
-                    add_item (iter, child);
+                    yield add_item (iter, child);
+                    GLib.Idle.add_full (GLib.Priority.LOW, add_item.callback);
+                    yield;
                 }
+                m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.DIRECTORY));
 
                 group.updated.connect (() => {
                     bool group_expanded = m_TreeView.is_row_expanded (m_TreeStore.get_path (iter));
@@ -402,13 +400,18 @@ public class GVT.Manager : GLib.Object
                     icon = Manager.pixbuf_from_stock (Gtk.Stock.PAGE_SETUP);
                 Gtk.TreeIter iter;
 
+                debug ("Add target %s in %s", inItem.name, name);
                 m_TreeStore.append (out iter, inIter);
-                m_TreeStore.set (iter, 0, icon, 1, inItem.name, 2, inItem);
+                m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, inItem.name, 2, inItem);
 
                 foreach (unowned Item child in target)
                 {
-                    add_item (iter, child);
+                    yield add_item (iter, child);
+                    GLib.Idle.add_full (GLib.Priority.LOW, add_item.callback);
+                    yield;
                 }
+
+                m_TreeStore.set (iter, 0, icon);
             }
             else if (inItem is Source)
             {
@@ -419,8 +422,9 @@ public class GVT.Manager : GLib.Object
                     Gdk.Pixbuf icon = Manager.detect_type_from_file (source.filename).icon;
                     Gtk.TreeIter iter;
 
+                    debug ("Add source %s in %s", inItem.name, name);
                     m_TreeStore.append (out iter, inIter);
-                    m_TreeStore.set (iter, 0, icon, 1, inItem.name, 2, inItem);
+                    m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, inItem.name, 2, inItem);
 
                     if (source.filename != null && GLib.FileUtils.test (source.filename, GLib.FileTest.EXISTS))
                     {
@@ -432,6 +436,7 @@ public class GVT.Manager : GLib.Object
                         else
                             m_TmFiles.resize (m_TmFiles.length - 1);
                     }
+                    m_TreeStore.set (iter, 0, icon);
                 }
             }
             else if (inItem is Data)
@@ -444,6 +449,7 @@ public class GVT.Manager : GLib.Object
                     Gtk.TreeIter iter;
                     string name = inItem.name;
 
+                    debug ("Add data %s in %s", inItem.name, name);
                     m_TreeStore.append (out iter, inIter);
                     m_TreeStore.set (iter, 0, icon, 1, name.length == 0 ? "data" : name, 2, inItem);
                 }
@@ -453,13 +459,17 @@ public class GVT.Manager : GLib.Object
                     Gtk.TreeIter iter;
                     string name = inItem.name;
 
+                    debug ("Add data group %s in %s", inItem.name, name);
                     m_TreeStore.append (out iter, inIter);
-                    m_TreeStore.set (iter, 0, icon, 1, name.length == 0 ? "data" : name, 2, inItem);
+                    m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, name.length == 0 ? "data" : name, 2, inItem);
 
                     foreach (unowned Item child in data)
                     {
-                        add_item (iter, child);
+                        yield add_item (iter, child);
+                        GLib.Idle.add_full (GLib.Priority.LOW, add_item.callback);
+                        yield;
                     }
+                    m_TreeStore.set (iter, 0, icon);
                 }
             }
         }
@@ -553,6 +563,20 @@ public class GVT.Manager : GLib.Object
             }
 
             return nb_matches;
+        }
+
+        public async void
+        load ()
+        {
+            debug ("Load %s", name);
+            m_TreeStore.set (m_IterRoot, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH));
+            foreach (unowned Item? item in m_Project)
+            {
+                yield add_item (m_IterRoot, item);
+                GLib.Idle.add_full (GLib.Priority.LOW, load.callback);
+                yield;
+            }
+            m_TreeStore.set (m_IterRoot, 0, Manager.pixbuf_from_stock (Gtk.Stock.DIRECTORY));
         }
 
         public async void
@@ -1033,7 +1057,9 @@ public class GVT.Manager : GLib.Object
         {
             foreach (string project in m_GlobalPrefs.current_projects)
             {
-                m_Projects.insert (new Prj (this, project));
+                Prj prj = new Prj (this, project);
+                m_Projects.insert (prj);
+                prj.load.begin ();
             }
         }
 
@@ -1440,20 +1466,22 @@ public class GVT.Manager : GLib.Object
             {
                 Prj prj = new Prj (this, Filename.from_uri (recent_chooser_menu.get_current_uri ()));
                 m_Projects.insert (prj);
-                string[] c = {};
-                foreach (unowned Prj p in m_Projects)
-                {
-                    c += p.path;
-                }
-                c += null;
-                m_GlobalPrefs.current_projects = c;
-                m_GlobalPrefs.save ();
+                prj.load.begin (() => {
+                    string[] c = {};
+                    foreach (unowned Prj p in m_Projects)
+                    {
+                        c += p.path;
+                    }
+                    c += null;
+                    m_GlobalPrefs.current_projects = c;
+                    m_GlobalPrefs.save ();
 
-                GLib.SList<string> files = prj.get_open_files ();
-                if (files != null)
-                {
-                    Geany.Document.open_files (files);
-                }
+                    GLib.SList<string> files = prj.get_open_files ();
+                    if (files != null)
+                    {
+                        Geany.Document.open_files (files);
+                    }
+                });
             }
             catch (GLib.Error err)
             {
@@ -1521,20 +1549,22 @@ public class GVT.Manager : GLib.Object
         {
             Prj prj = new Prj (this, dialog.get_filename ());
             m_Projects.insert (prj);
-            string[] c = {};
-            foreach (unowned Prj p in m_Projects)
-            {
-                c += p.path;
-            }
-            c += null;
-            m_GlobalPrefs.current_projects = c;
-            m_GlobalPrefs.save ();
+            prj.load.begin (() => {
+                string[] c = {};
+                foreach (unowned Prj p in m_Projects)
+                {
+                    c += p.path;
+                }
+                c += null;
+                m_GlobalPrefs.current_projects = c;
+                m_GlobalPrefs.save ();
 
-            GLib.SList<string> files = prj.get_open_files ();
-            if (files != null)
-            {
-                Geany.Document.open_files (files);
-            }
+                GLib.SList<string> files = prj.get_open_files ();
+                if (files != null)
+                {
+                    Geany.Document.open_files (files);
+                }
+            });
         }
 
         dialog.destroy ();
