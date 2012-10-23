@@ -198,6 +198,7 @@ public class GVT.Manager : GLib.Object
         private Project                       m_Project;
         private Geany.TagManager.SourceFile[] m_TmFiles = {};
         private Gtk.TreeIter                  m_IterRoot;
+        private int                           m_Update = 0;
 
         // accessors
         public string name {
@@ -312,71 +313,58 @@ public class GVT.Manager : GLib.Object
             }
         }
 
-        private async void
-        add_item (Gtk.TreeIter inIter, Item? inItem)
+        private void
+        on_group_updated (Gtk.TreeIter inIter)
         {
-            if (inItem is Group)
+            m_Update++;
+            debug ("Group update %i", m_Update);
+            if (m_Update == 1)
             {
-                Group group = (Group)inItem;
-                Gtk.TreeIter iter;
+                Group group;
+                m_TreeStore.get (inIter, 2, out group);
 
-                debug ("Add group %s in %s", inItem.name, name);
-                m_TreeStore.append (out iter, inIter);
-                m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, inItem.name, 2, inItem);
+                bool group_expanded = m_TreeView.is_row_expanded (m_TreeStore.get_path (inIter));
+                Set<string> expanded = new Set<string> ();
+                expanded.compare_func = (a, b) => {
+                    return GLib.strcmp (a, b);
+                };
 
-                foreach (unowned Item child in group)
+                // Remove all targets and datas
+                int nb = m_TreeStore.iter_n_children (inIter);
+                for (int cpt = nb - 1; cpt >= 0; --cpt)
                 {
-                    yield add_item (iter, child);
-                    GLib.Idle.add_full (GLib.Priority.LOW, add_item.callback);
-                    yield;
+                    Gtk.TreeIter child_iter;
+                    m_TreeStore.iter_nth_child (out child_iter, inIter, cpt);
+                    unowned Item? child = null;
+                    m_TreeStore.get (child_iter, 2, out child);
+
+                    if (m_TreeView.is_row_expanded (m_TreeStore.get_path (child_iter)))
+                    {
+                        expanded.insert (child.name);
+                    }
+
+                    if (child is Target || child is Data)
+                    {
+                        debug ("Remove %s", child.name);
+                        m_TreeStore.remove (child_iter);
+                    }
                 }
-                m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.DIRECTORY));
 
-                group.updated.connect (() => {
-                    bool group_expanded = m_TreeView.is_row_expanded (m_TreeStore.get_path (iter));
-                    Set<string> expanded = new Set<string> ();
-                    expanded.compare_func = (a, b) => {
-                        return GLib.strcmp (a, b);
-                    };
-
-                    // Remove all targets and datas
-                    int nb = m_TreeStore.iter_n_children (iter);
-                    for (int cpt = nb - 1; cpt >= 0; --cpt)
-                    {
-                        Gtk.TreeIter child_iter;
-                        m_TreeStore.iter_nth_child (out child_iter, iter, cpt);
-                        unowned Item? child = null;
-                        m_TreeStore.get (child_iter, 2, out child);
-
-                        if (m_TreeView.is_row_expanded (m_TreeStore.get_path (child_iter)))
-                        {
-                            expanded.insert (child.name);
-                        }
-
-                        if (child is Target || child is Data)
-                        {
-                            m_TreeStore.remove (child_iter);
-                        }
-                    }
-
-                    // Re add them
-                    foreach (unowned Item child in group)
-                    {
-                        if (child is Target || child is Data)
-                            add_item (iter, child);
-                    }
+                // update group
+                update_group.begin (inIter, group, (obj, res) => {
+                    debug ("Finish %i update", m_Update);
 
                     // Re-expand rows
                     if (group_expanded)
                     {
-                        m_TreeView.expand_row (m_TreeStore.get_path (iter), false);
+                        m_TreeView.expand_row (m_TreeStore.get_path (inIter), false);
                     }
 
-                    nb = m_TreeStore.iter_n_children (iter);
+                    nb = m_TreeStore.iter_n_children (inIter);
                     for (int cpt = 0; cpt < nb; ++cpt)
                     {
                         Gtk.TreeIter child_iter;
-                        m_TreeStore.iter_nth_child (out child_iter, iter, cpt);
+                        m_TreeStore.iter_nth_child (out child_iter, inIter, cpt);
                         unowned Item? child = null;
                         m_TreeStore.get (child_iter, 2, out child);
                         if (child.name in expanded)
@@ -384,93 +372,151 @@ public class GVT.Manager : GLib.Object
                             m_TreeView.expand_row (m_TreeStore.get_path (child_iter), false);
                         }
                     }
+
+                    // Relaunch pending update
+                    m_Update--;
+                    if (m_Update != 0)
+                    {
+                        m_Update = 0;
+                        on_group_updated (inIter);
+                    }
                 });
-                // workaround for valac 0.12 which does not support owned/unowned delegate
-                unref ();
+            }
+        }
+
+        private async void
+        update_group (Gtk.TreeIter inIter, Group inGroup)
+        {
+            // Re add them
+            foreach (unowned Item child in inGroup)
+            {
+                if (child is Target)
+                    yield add_target_item (inIter, child as Target);
+                else if (child is Data)
+                    yield add_data_item (inIter, child as Data);
+            }
+        }
+
+        private async void
+        add_group_item (Gtk.TreeIter inIter, Group inGroup)
+        {
+            Gtk.TreeIter iter;
+
+            debug ("Add group %s in %s", inGroup.name, name);
+            m_TreeStore.append (out iter, inIter);
+            m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, inGroup.name, 2, inGroup);
+
+            foreach (unowned Item child in inGroup)
+            {
+                yield add_item (iter, child);
+            }
+            m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.DIRECTORY));
+
+            inGroup.updated.connect (() => {
+                on_group_updated (iter);
+            });
+
+            // workaround for valac 0.12 which does not support owned/unowned delegate
+            unref ();
+        }
+
+        private async void
+        add_target_item (Gtk.TreeIter inIter, Target inTarget)
+        {
+            Gdk.Pixbuf icon = Manager.pixbuf_from_stock (Gtk.Stock.NEW);
+
+            if (inTarget.target_type == TargetType.EXECUTABLE)
+                icon = Manager.pixbuf_from_stock (Gtk.Stock.EXECUTE);
+            else
+                icon = Manager.pixbuf_from_stock (Gtk.Stock.PAGE_SETUP);
+            Gtk.TreeIter iter;
+
+            debug ("Add target %s in %s", inTarget.name, name);
+            m_TreeStore.append (out iter, inIter);
+            m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, inTarget.name, 2, inTarget);
+
+            foreach (unowned Item child in inTarget)
+            {
+                yield add_item (iter, child);
+            }
+
+            m_TreeStore.set (iter, 0, icon);
+        }
+
+        private async void
+        add_source_item (Gtk.TreeIter inIter, Source inSource)
+        {
+            if (inSource.filename != null)
+            {
+                Gdk.Pixbuf icon = Manager.detect_type_from_file (inSource.filename).icon;
+                Gtk.TreeIter iter;
+
+                debug ("Add source %s in %s", inSource.name, name);
+                m_TreeStore.append (out iter, inIter);
+                m_TreeStore.set (iter, 0, icon, 1, inSource.name, 2, inSource);
+
+                if (inSource.filename != null && GLib.FileUtils.test (inSource.filename, GLib.FileTest.EXISTS))
+                {
+                    m_TmFiles += new Geany.TagManager.SourceFile (inSource.filename, true, inSource.file_type.name);
+                    if (m_TmFiles [m_TmFiles.length - 1] != null)
+                    {
+                        inSource.set_data ("tm-file", m_TmFiles.length);
+                    }
+                    else
+                        m_TmFiles.resize (m_TmFiles.length - 1);
+                }
+            }
+        }
+
+        private async void
+        add_data_item (Gtk.TreeIter inIter, Data inData)
+        {
+            if (inData.length == 0)
+            {
+                Gdk.Pixbuf icon = Manager.detect_type_from_file (inData.filename).icon;
+                Gtk.TreeIter iter;
+                string name = inData.name;
+
+                debug ("Add data %s in %s", inData.name, name);
+                m_TreeStore.append (out iter, inIter);
+                m_TreeStore.set (iter, 0, icon, 1, name.length == 0 ? "data" : name, 2, inData);
+            }
+            else
+            {
+                Gdk.Pixbuf icon = Manager.pixbuf_from_stock (Gtk.Stock.EDIT);
+                Gtk.TreeIter iter;
+                string name = inData.name;
+
+                debug ("Add data group %s in %s", inData.name, name);
+                m_TreeStore.append (out iter, inIter);
+                m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, name.length == 0 ? "data" : name, 2, inData);
+
+                foreach (unowned Item child in inData)
+                {
+                    yield add_item (iter, child);
+                }
+                m_TreeStore.set (iter, 0, icon);
+            }
+        }
+
+        private async void
+        add_item (Gtk.TreeIter inIter, Item? inItem)
+        {
+            if (inItem is Group)
+            {
+                yield add_group_item (inIter, inItem as Group);
             }
             else if (inItem is Target)
             {
-                unowned Target target = (Target)inItem;
-
-                Gdk.Pixbuf icon = Manager.pixbuf_from_stock (Gtk.Stock.NEW);
-
-                if (target.target_type == TargetType.EXECUTABLE)
-                    icon = Manager.pixbuf_from_stock (Gtk.Stock.EXECUTE);
-                else
-                    icon = Manager.pixbuf_from_stock (Gtk.Stock.PAGE_SETUP);
-                Gtk.TreeIter iter;
-
-                debug ("Add target %s in %s", inItem.name, name);
-                m_TreeStore.append (out iter, inIter);
-                m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, inItem.name, 2, inItem);
-
-                foreach (unowned Item child in target)
-                {
-                    yield add_item (iter, child);
-                    GLib.Idle.add_full (GLib.Priority.LOW, add_item.callback);
-                    yield;
-                }
-
-                m_TreeStore.set (iter, 0, icon);
+                yield add_target_item (inIter, inItem as Target);
             }
             else if (inItem is Source)
             {
-                unowned Source source = (Source)inItem;
-
-                if (source.filename != null)
-                {
-                    Gdk.Pixbuf icon = Manager.detect_type_from_file (source.filename).icon;
-                    Gtk.TreeIter iter;
-
-                    debug ("Add source %s in %s", inItem.name, name);
-                    m_TreeStore.append (out iter, inIter);
-                    m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, inItem.name, 2, inItem);
-
-                    if (source.filename != null && GLib.FileUtils.test (source.filename, GLib.FileTest.EXISTS))
-                    {
-                        m_TmFiles += new Geany.TagManager.SourceFile (source.filename, true, source.file_type.name);
-                        if (m_TmFiles [m_TmFiles.length - 1] != null)
-                        {
-                            source.set_data ("tm-file", m_TmFiles.length);
-                        }
-                        else
-                            m_TmFiles.resize (m_TmFiles.length - 1);
-                    }
-                    m_TreeStore.set (iter, 0, icon);
-                }
+                yield add_source_item (inIter, inItem as Source);
             }
             else if (inItem is Data)
             {
-                Data data = (Data)inItem;
-
-                if (data.length == 0)
-                {
-                    Gdk.Pixbuf icon = Manager.detect_type_from_file (((Data)inItem).filename).icon;
-                    Gtk.TreeIter iter;
-                    string name = inItem.name;
-
-                    debug ("Add data %s in %s", inItem.name, name);
-                    m_TreeStore.append (out iter, inIter);
-                    m_TreeStore.set (iter, 0, icon, 1, name.length == 0 ? "data" : name, 2, inItem);
-                }
-                else
-                {
-                    Gdk.Pixbuf icon = Manager.pixbuf_from_stock (Gtk.Stock.EDIT);
-                    Gtk.TreeIter iter;
-                    string name = inItem.name;
-
-                    debug ("Add data group %s in %s", inItem.name, name);
-                    m_TreeStore.append (out iter, inIter);
-                    m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, name.length == 0 ? "data" : name, 2, inItem);
-
-                    foreach (unowned Item child in data)
-                    {
-                        yield add_item (iter, child);
-                        GLib.Idle.add_full (GLib.Priority.LOW, add_item.callback);
-                        yield;
-                    }
-                    m_TreeStore.set (iter, 0, icon);
-                }
+                yield add_data_item (inIter, inItem as Data);
             }
         }
 
@@ -1189,6 +1235,7 @@ public class GVT.Manager : GLib.Object
             for (;item != null && !(item is Project); item = item.parent);
             if (item != null)
             {
+                debug ("Close %s", item.name);
                 unowned Prj? prj = m_Projects.search <string> (item.name, (k, v) => {
                     return GLib.strcmp (k.project_name, v);
                 });
