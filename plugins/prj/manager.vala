@@ -118,6 +118,15 @@ public class GVT.Manager : GLib.Object
             }
         }
 
+        public string last_configure_params {
+            owned get {
+                return Geany.Utils.get_setting_string (m_Config, "project", "configure", "");
+            }
+            set {
+                m_Config.set_string ("project", "configure", value);
+            }
+        }
+
         public Prefs (Project inProject)
         {
             m_Filename = inProject.path + "/." + inProject.name + ".gvt-project";
@@ -244,6 +253,12 @@ public class GVT.Manager : GLib.Object
                         }
                     }
                 }
+            }
+        }
+
+        public string configure_params {
+            owned get {
+                return m_Prefs.last_configure_params;
             }
         }
 
@@ -692,6 +707,7 @@ public class GVT.Manager : GLib.Object
                 Geany.MessageWindow.compiler_add (Geany.MessageWindow.Color.BLUE, "Launching %s %s", !inRegenerate ? "./configure" : "./autogen.sh", inParams);
                 Geany.Ui.progress_bar_start (null);
                 s_CommandLaunched = m_Autotools.configure (m_Project, inParams, inRegenerate);
+                m_Prefs.last_configure_params = inParams;
             }
         }
 
@@ -969,6 +985,10 @@ public class GVT.Manager : GLib.Object
             get {
                 unowned Gtk.Entry entry = (Gtk.Entry)m_Combo.get_child ();
                 return entry.get_text ();
+            }
+            set {
+                unowned Gtk.Entry entry = (Gtk.Entry)m_Combo.get_child ();
+                entry.set_text (value);
             }
         }
 
@@ -1289,6 +1309,7 @@ public class GVT.Manager : GLib.Object
                 menu.add (menu_configure);
 
                 menu_configure.activate.connect (() => {
+                    m_ConfigureDialog.params = prj.configure_params;
                     bool ret = m_ConfigureDialog.main ();
                     message ("ret = %s", ret.to_string ());
                     if (ret)
@@ -1796,6 +1817,7 @@ public class GVT.Manager : GLib.Object
             {
                 if (filename.has_prefix (prj.path + "/"))
                 {
+                    m_ConfigureDialog.params = prj.configure_params;
                     bool ret = m_ConfigureDialog.main ();
                     if (ret)
                     {
