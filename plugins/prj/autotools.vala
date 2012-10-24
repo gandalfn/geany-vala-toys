@@ -19,6 +19,68 @@
 
 public class GVT.Autotools : Backend
 {
+    // types
+    private enum RegexType
+    {
+        RESOLV_PROJECT_VARIABLE,
+        RESOLV_VARIABLE_1,
+        RESOLV_VARIABLE_2,
+        AC_INIT_1,
+        AC_INIT_2,
+        M4_DEFINE,
+        AC_SUBST,
+        AC_CONFIG_FILES,
+        AC_OUTPUT,
+        N;
+
+        public GLib.Regex?
+        get ()
+        {
+            try
+            {
+                switch (this)
+                {
+                    case RESOLV_PROJECT_VARIABLE:
+                        return new GLib.Regex ("""([^\@]*)\@([^\@]+)\@([^\@]*)""", GLib.RegexCompileFlags.OPTIMIZE);
+
+                    case RESOLV_VARIABLE_1:
+                        return new GLib.Regex ("""^([^\$]*)\$\(([^\:]+)\:([^\=]+)\=([^\)]+)\)(.*)""", GLib.RegexCompileFlags.OPTIMIZE);
+
+                    case RESOLV_VARIABLE_2:
+                        return new GLib.Regex ("""^([^\$]*)\$(\(|\{)([^\)\}]+)(\)|\})(.*)""", GLib.RegexCompileFlags.OPTIMIZE);
+
+                    case AC_INIT_1:
+                        return new GLib.Regex ("""AC_INIT\(([^\\,\)]+),([^\\,\)]+)(,[^\)]*)?\)""", GLib.RegexCompileFlags.OPTIMIZE | GLib.RegexCompileFlags.MULTILINE);
+
+                    case AC_INIT_2:
+                        return new GLib.Regex ("""AC_INIT\(([^\\,\)]+)(,[^\)]*)?\)""", GLib.RegexCompileFlags.OPTIMIZE | GLib.RegexCompileFlags.MULTILINE);
+
+                    case M4_DEFINE:
+                        return new GLib.Regex ("""m4_define\(([^\,]+),([^\)]+)\)""", GLib.RegexCompileFlags.OPTIMIZE);
+
+                    case AC_SUBST:
+                        return new GLib.Regex ("""AC_SUBST\(([^\)]*)\)""", GLib.RegexCompileFlags.OPTIMIZE);
+
+                    case AC_CONFIG_FILES:
+                        return new GLib.Regex ("""AC_CONFIG_FILES\(\[([^\\\]]*)\]\)""", GLib.RegexCompileFlags.OPTIMIZE | GLib.RegexCompileFlags.MULTILINE);
+
+                    case AC_OUTPUT:
+                        return new GLib.Regex ("""AC_OUTPUT\(\[([^\\\]]*)\]\)""", GLib.RegexCompileFlags.OPTIMIZE | GLib.RegexCompileFlags.MULTILINE);
+
+                }
+            }
+            catch (GLib.Error err)
+            {
+                critical ("Error on create regex %i: %s", this, err.message);
+            }
+
+            return null;
+        }
+    }
+
+    // properties
+    private class GLib.Regex?[] c_Regexs;
+
     // static methods
     private static string?
     normalize_string (string? inData)
@@ -43,6 +105,16 @@ public class GVT.Autotools : Backend
         res.strip ();
 
         return res;
+    }
+
+    // class methods
+    class construct
+    {
+        c_Regexs = new GLib.Regex? [RegexType.N];
+        for (int cpt = 0; cpt < RegexType.N; ++cpt)
+        {
+            c_Regexs[cpt] = ((RegexType)cpt).get ();
+        }
     }
 
     // methods
@@ -119,29 +191,21 @@ public class GVT.Autotools : Backend
     {
         string ret = inVal.strip ();
 
-        try
-        {
-            GLib.Regex re = new GLib.Regex ("""([^\@]*)\@([^\@]+)\@([^\@]*)""");
-            GLib.MatchInfo match;
+        GLib.MatchInfo match;
 
-            if (re.match (ret, RegexMatchFlags.NEWLINE_ANY, out match))
-            {
-                unowned Variable? resolv = inProject.variables.search<string> (match.fetch (2), (v, k) => {
-                    return GLib.strcmp (v.name, k);
-                });
-                if (resolv != null)
-                {
-                    ret = match.fetch (1) + resolv_project_variable (inProject, resolv.val) + match.fetch (3);
-                }
-                else
-                {
-                    ret = match.fetch (1) + match.fetch (2) + match.fetch (3);
-                }
-            }
-        }
-        catch (GLib.Error err)
+        if (c_Regexs[RegexType.RESOLV_PROJECT_VARIABLE].match (ret, RegexMatchFlags.NEWLINE_ANY, out match))
         {
-            warning ("Error on resolving %s: %s", inVal, err.message);
+            unowned Variable? resolv = inProject.variables.search<string> (match.fetch (2), (v, k) => {
+                return GLib.strcmp (v.name, k);
+            });
+            if (resolv != null)
+            {
+                ret = match.fetch (1) + resolv_project_variable (inProject, resolv.val) + match.fetch (3);
+            }
+            else
+            {
+                ret = match.fetch (1) + match.fetch (2) + match.fetch (3);
+            }
         }
 
         return ret;
@@ -152,41 +216,31 @@ public class GVT.Autotools : Backend
     {
         string ret = inVal.strip ();
 
-        try
+        GLib.MatchInfo match;
+        if (c_Regexs[RegexType.RESOLV_VARIABLE_1].match (ret, RegexMatchFlags.NEWLINE_ANY, out match))
         {
-            var re = new GLib.Regex ("""^([^\$]*)\$\(([^\:]+)\:([^\=]+)\=([^\)]+)\)(.*)""");
-            GLib.MatchInfo match;
-            if (re.match (ret, RegexMatchFlags.NEWLINE_ANY, out match))
+            ret = match.fetch(1) + resolv_variable (inGroup, "$(" + match.fetch(2) + ")") + match.fetch(4);
+        }
+        else
+        {
+            if (c_Regexs[RegexType.RESOLV_VARIABLE_2].match (ret, RegexMatchFlags.NEWLINE_ANY, out match))
             {
-                ret = match.fetch(1) + resolv_variable (inGroup, "$(" + match.fetch(2) + ")") + match.fetch(4);
-            }
-            else
-            {
-                re = new GLib.Regex ("""^([^\$]*)\$(\(|\{)([^\)\}]+)(\)|\})(.*)""");
-
-                if (re.match (ret, RegexMatchFlags.NEWLINE_ANY, out match))
+                unowned Variable? resolv = inGroup.variables.search<string> (match.fetch (3), (v, k) => {
+                    return GLib.strcmp (v.name, k);
+                });
+                if (resolv != null)
                 {
-                    unowned Variable? resolv = inGroup.variables.search<string> (match.fetch (3), (v, k) => {
-                        return GLib.strcmp (v.name, k);
-                    });
-                    if (resolv != null)
-                    {
-                        ret = match.fetch (1) + resolv_variable (inGroup, resolv.val) + match.fetch (5);
-                    }
-                    else
-                    {
-                        ret = "";
-                    }
+                    ret = match.fetch (1) + resolv_variable (inGroup, resolv.val) + match.fetch (5);
                 }
-                else if (ret.has_prefix ("$"))
+                else
                 {
                     ret = "";
                 }
             }
-        }
-        catch (GLib.Error err)
-        {
-            warning ("Error on resolving %s: %s", inVal, err.message);
+            else if (ret.has_prefix ("$"))
+            {
+                ret = "";
+            }
         }
 
         return ret;
@@ -465,20 +519,18 @@ public class GVT.Autotools : Backend
             GLib.MappedFile file = new GLib.MappedFile (inConfigure, false);
 
             // Extract project name and version
-            GLib.Regex reg = new GLib.Regex ("""AC_INIT\(([^\\,\)]+),([^\\,\)]+)(,[^\)]*)?\)""", RegexCompileFlags.MULTILINE);
             GLib.MatchInfo match;
             string name = null;
             string version = null;
 
-            if (reg.match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match))
+            if (c_Regexs[RegexType.AC_INIT_1].match ((string)file.get_contents (), GLib.RegexMatchFlags.NEWLINE_ANY, out match))
             {
                 name = match.fetch (1);
                 version = match.fetch (2);
             }
             else
             {
-                reg = new GLib.Regex ("""AC_INIT\(([^\\,\)]+)(,[^\)]*)?\)""", RegexCompileFlags.MULTILINE);
-                if (reg.match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match))
+                if (c_Regexs[RegexType.AC_INIT_2].match ((string)file.get_contents (), GLib.RegexMatchFlags.NEWLINE_ANY, out match))
                 {
                     name = match.fetch (1);
                 }
@@ -491,11 +543,10 @@ public class GVT.Autotools : Backend
                                    GLib.Path.get_dirname (inConfigure));
 
             // Extract m4define
-            reg = new GLib.Regex ("""m4_define\(([^\,]+),([^\)]+)\)""");
             var m4defines = new Set<Variable> ();
             m4defines.compare_func = Variable.compare;
 
-            if (reg.match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match))
+            if (c_Regexs[RegexType.M4_DEFINE].match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match))
             {
                 do
                 {
@@ -532,8 +583,7 @@ public class GVT.Autotools : Backend
             project.version = string.joinv (".", vs);
 
             // Extract AC_SUBST variables
-            reg = new GLib.Regex ("""AC_SUBST\(([^\)]*)\)""");
-            if (reg.match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match))
+            if (c_Regexs[RegexType.AC_SUBST].match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match))
             {
                 do
                 {
@@ -558,12 +608,10 @@ public class GVT.Autotools : Backend
             }
 
             // Extract AC_CONFIG_FILES
-            reg = new GLib.Regex ("""AC_CONFIG_FILES\(\[([^\\\]]*)\]\)""", RegexCompileFlags.MULTILINE);
-            bool res = reg.match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match);
+            bool res = c_Regexs[RegexType.AC_CONFIG_FILES].match ((string)file.get_contents (), GLib.RegexMatchFlags.NEWLINE_ANY, out match);
             if (!res)
             {
-                reg = new GLib.Regex ("""AC_OUTPUT\(\[([^\\\]]*)\]\)""", RegexCompileFlags.MULTILINE);
-                res = reg.match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match);
+                res = c_Regexs[RegexType.AC_OUTPUT].match ((string)file.get_contents (), GLib.RegexMatchFlags.NEWLINE_ANY, out match);
             }
             if (res)
             {

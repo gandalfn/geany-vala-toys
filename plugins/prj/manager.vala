@@ -286,8 +286,7 @@ public class GVT.Manager : GLib.Object
             m_TreeStore.remove (m_IterRoot);
             foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
             {
-                file.update (true, false, true);
-                geany_data.app.tm_workspace.remove_object (file, false, false);
+                geany_data.app.tm_workspace.remove_object (file, false, true);
             }
         }
 
@@ -824,7 +823,7 @@ public class GVT.Manager : GLib.Object
                 if (num > 0)
                 {
                     debug ("update tag of %s", source.name);
-                    m_TmFiles[num - 1].update (true, false, true);
+                    m_TmFiles[num - 1].update (true, false, false);
                 }
             }
         }
@@ -881,7 +880,8 @@ public class GVT.Manager : GLib.Object
         // properties
         private unowned Prj?           m_Prj;
         private unowned Gtk.Entry?     m_Entry;
-        private GLib.RegexCompileFlags m_Flags = GLib.RegexCompileFlags.CASELESS;
+        private GLib.RegexCompileFlags m_Flags = GLib.RegexCompileFlags.CASELESS |
+                                                 GLib.RegexCompileFlags.OPTIMIZE;
 
         // methods
         construct
