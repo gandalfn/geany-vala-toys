@@ -2,7 +2,7 @@ include $(top_srcdir)/build/common.am
 
 INCLUDES += \
     -DG_LOG_DOMAIN=\"Gdl\" \
-    -I..
+    -I${top_srcdir}/plugins/dock
 
 noinst_LTLIBRARIES = libgdl-1.la
 

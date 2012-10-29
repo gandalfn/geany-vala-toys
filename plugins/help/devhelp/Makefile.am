@@ -2,7 +2,7 @@ include $(top_srcdir)/build/common.am
 
 INCLUDES += \
 	-DG_LOG_DOMAIN=\"Devhelp\" \
-	-I..
+	-I${top_srcdir}/plugins/help
 
 noinst_LTLIBRARIES = libdevhelp-2.la
 
