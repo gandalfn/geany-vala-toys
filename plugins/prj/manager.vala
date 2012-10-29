@@ -241,7 +241,7 @@ public class GVT.Manager : GLib.Object
                         debug ("set %s active", name);
                         foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
                         {
-                            geany_data.app.tm_workspace.add_object (file);
+                            Geany.TagManager.Workspace.add_object (file);
                         }
                     }
                     else
@@ -249,7 +249,7 @@ public class GVT.Manager : GLib.Object
                         debug ("set %s inactive", name);
                         foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
                         {
-                            geany_data.app.tm_workspace.remove_object (file, false, false);
+                            Geany.TagManager.Workspace.remove_object (file, false, false);
                         }
                     }
                 }
@@ -298,10 +298,10 @@ public class GVT.Manager : GLib.Object
         ~Prj ()
         {
             active = false;
-            m_TreeStore.remove (m_IterRoot);
+            m_TreeStore.remove (ref m_IterRoot);
             foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
             {
-                geany_data.app.tm_workspace.remove_object (file, false, true);
+                Geany.TagManager.Workspace.remove_object (file, false, true);
             }
         }
 
@@ -360,7 +360,7 @@ public class GVT.Manager : GLib.Object
                     if (child is Target || child is Data)
                     {
                         debug ("Remove %s", child.name);
-                        m_TreeStore.remove (child_iter);
+                        m_TreeStore.remove (ref child_iter);
                     }
                 }
 
@@ -856,7 +856,7 @@ public class GVT.Manager : GLib.Object
                 if (num > 0)
                 {
                     debug ("add tag of %s", source.name);
-                    geany_data.app.tm_workspace.add_object (m_TmFiles[num - 1]);
+                    Geany.TagManager.Workspace.add_object (m_TmFiles[num - 1]);
                 }
             }
         }
@@ -873,7 +873,7 @@ public class GVT.Manager : GLib.Object
                 if (num > 0)
                 {
                     debug ("remove tag of %s", source.name);
-                    geany_data.app.tm_workspace.remove_object (m_TmFiles[num - 1], false, false);
+                    Geany.TagManager.Workspace.remove_object (m_TmFiles[num - 1], false, false);
                 }
             }
         }
@@ -963,7 +963,7 @@ public class GVT.Manager : GLib.Object
                 try
                 {
                     GLib.Regex regex = new GLib.Regex (m_Entry.get_text (), m_Flags);
-                    m_Prj.search (regex);
+                    m_Prj.search.begin (regex);
                 }
                 catch (GLib.Error err)
                 {
