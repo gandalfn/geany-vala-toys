@@ -56,6 +56,7 @@ PKG_CHECK_MODULES(GEANY_VALA_TOYS, [gtk+-2.0 >= $GTK_REQUIRED
                                     libwnck-1.0 >= $LIBWNCK_REQUIRED
                                     libxml-2.0 >= $LIBXML2_REQUIRED
                                     gconf-2.0 >= $GCONF2_REQUIRED
+                                    zlib
                                     geany >= $GEANY_REQUIRED])
 AC_SUBST(GEANY_VALA_TOYS_CFLAGS)
 AC_SUBST(GEANY_VALA_TOYS_LIBS)

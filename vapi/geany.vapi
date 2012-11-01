@@ -17,7 +17,7 @@
  *
  */
 
-[CCode (cheader_filename = "geanyplugin.h")]
+[CCode (cheader_filename = "geanyplugin.h,geanyfunctions.h")]
 namespace Geany {
     /* reviewed */
     [Compact]
@@ -1318,7 +1318,7 @@ namespace Geany {
     }
     /* reviewed */
     [Compact]
-    [CCode (cname = "struct GeanyFiletype", cheader_filename = "geanyplugin.h,geanyfunctions.h", cprefix = "filetypes_")]
+    [CCode (cname = "struct GeanyFiletype", cprefix = "filetypes_")]
     public class Filetype {
         public string                   context_action_cmd;
         public string?                  comment_close;
@@ -1940,11 +1940,13 @@ namespace Geany {
             public WorkObject?      parent;
             public time_t           analyze_time;
             public GLib.PtrArray    tags_array;
+
         }
         [Compact]
         public class Workspace : WorkObject {
             public GLib.PtrArray    global_tags;
             public GLib.PtrArray    work_objects;
+
 
             public static bool      add_object (WorkObject work_object);
             public static bool      remove_object (WorkObject w, bool do_free, bool update);

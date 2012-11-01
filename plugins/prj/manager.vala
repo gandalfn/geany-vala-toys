@@ -416,7 +416,7 @@ public class GVT.Manager : GLib.Object
         {
             Gtk.TreeIter iter;
 
-            debug ("Add group %s in %s", inGroup.name, name);
+            //debug ("Add group %s in %s", inGroup.name, name);
             m_TreeStore.append (out iter, inIter);
             m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, inGroup.name, 2, inGroup);
 
@@ -445,7 +445,7 @@ public class GVT.Manager : GLib.Object
                 icon = Manager.pixbuf_from_stock (Gtk.Stock.PAGE_SETUP);
             Gtk.TreeIter iter;
 
-            debug ("Add target %s in %s", inTarget.name, name);
+            //debug ("Add target %s in %s", inTarget.name, name);
             m_TreeStore.append (out iter, inIter);
             m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, inTarget.name, 2, inTarget);
 
@@ -465,7 +465,7 @@ public class GVT.Manager : GLib.Object
                 Gdk.Pixbuf icon = Manager.detect_type_from_file (inSource.filename).icon;
                 Gtk.TreeIter iter;
 
-                debug ("Add source %s in %s", inSource.name, name);
+                //debug ("Add source %s in %s", inSource.name, name);
                 m_TreeStore.append (out iter, inIter);
                 m_TreeStore.set (iter, 0, icon, 1, inSource.name, 2, inSource);
 
@@ -474,7 +474,8 @@ public class GVT.Manager : GLib.Object
                     m_TmFiles += new Geany.TagManager.SourceFile (inSource.filename, true, inSource.file_type.name);
                     if (m_TmFiles [m_TmFiles.length - 1] != null)
                     {
-                        inSource.set_data ("tm-file", m_TmFiles.length);
+                        unowned Geany.TagManager.SourceFile tm_file = m_TmFiles [m_TmFiles.length - 1];
+                        inSource.set_data<unowned Geany.TagManager.SourceFile> ("tm-file", tm_file);
                     }
                     else
                         m_TmFiles.resize (m_TmFiles.length - 1);
@@ -491,7 +492,7 @@ public class GVT.Manager : GLib.Object
                 Gtk.TreeIter iter;
                 string name = inData.name;
 
-                debug ("Add data %s in %s", inData.name, name);
+                //debug ("Add data %s in %s", inData.name, name);
                 m_TreeStore.append (out iter, inIter);
                 m_TreeStore.set (iter, 0, icon, 1, name.length == 0 ? "data" : name, 2, inData);
             }
@@ -501,7 +502,7 @@ public class GVT.Manager : GLib.Object
                 Gtk.TreeIter iter;
                 string name = inData.name;
 
-                debug ("Add data group %s in %s", inData.name, name);
+                //debug ("Add data group %s in %s", inData.name, name);
                 m_TreeStore.append (out iter, inIter);
                 m_TreeStore.set (iter, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH), 1, name.length == 0 ? "data" : name, 2, inData);
 
@@ -541,7 +542,7 @@ public class GVT.Manager : GLib.Object
             {
                 Group group = (Group)inItem;
 
-                debug ("Add %s/Makefile.am", group.path);
+                //debug ("Add %s/Makefile.am", group.path);
                 inFilenames.prepend ("%s/Makefile.am".printf (group.path));
 
                 foreach (unowned Item child in group)
@@ -564,7 +565,7 @@ public class GVT.Manager : GLib.Object
 
                 if (source.filename != null)
                 {
-                    debug ("Add %s", source.filename);
+                    //debug ("Add %s", source.filename);
                     inFilenames.prepend (source.filename);
                 }
             }
@@ -576,13 +577,13 @@ public class GVT.Manager : GLib.Object
                 {
                     if (data.filename != null)
                     {
-                        debug ("Add %s", data.filename);
+                        //debug ("Add %s", data.filename);
                         inFilenames.prepend (data.filename);
                     }
                 }
                 else
                 {
-                    debug ("Add %s/Makefile.am", data.path);
+                    //debug ("Add %s/Makefile.am", data.path);
                     inFilenames.prepend ("%s/Makefile.am".printf (data.path));
                     foreach (unowned Item child in data)
                     {
@@ -835,45 +836,11 @@ public class GVT.Manager : GLib.Object
             if (item != null && item is Source)
             {
                 unowned Source? source = (Source?)item;
-                int num = source.get_data ("tm-file");
-                if (num > 0)
+                unowned Geany.TagManager.SourceFile? tm_file = source.get_data<unowned Geany.TagManager.SourceFile> ("tm-file");
+                if (tm_file != null)
                 {
                     debug ("update tag of %s", source.name);
-                    m_TmFiles[num - 1].update (true, false, false);
-                }
-            }
-        }
-
-        public void
-        add_tag (string inFilename)
-        {
-            string filename= inFilename.substring (m_Project.path.length + 1);
-            unowned Item? item = m_Project.find_path (filename);
-            if (item != null && item is Source)
-            {
-                unowned Source? source = (Source?)item;
-                int num = source.get_data ("tm-file");
-                if (num > 0)
-                {
-                    debug ("add tag of %s", source.name);
-                    Geany.TagManager.Workspace.add_object (m_TmFiles[num - 1]);
-                }
-            }
-        }
-
-        public void
-        remove_tag (string inFilename)
-        {
-            string filename= inFilename.substring (m_Project.path.length + 1);
-            unowned Item? item = m_Project.find_path (filename);
-            if (item != null && item is Source)
-            {
-                unowned Source? source = (Source?)item;
-                int num = source.get_data ("tm-file");
-                if (num > 0)
-                {
-                    debug ("remove tag of %s", source.name);
-                    Geany.TagManager.Workspace.remove_object (m_TmFiles[num - 1], false, false);
+                    tm_file.update (true, false, false);
                 }
             }
         }
@@ -1061,7 +1028,6 @@ public class GVT.Manager : GLib.Object
 
     // properties
     private GlobalPrefs        m_GlobalPrefs;
-    private Gtk.MenuItem       m_ProjectMenu;
     private Set<Prj>           m_Projects;
     private Gtk.TreeView       m_TreeView;
     private Gtk.TreeStore      m_TreeStore;
@@ -1088,11 +1054,8 @@ public class GVT.Manager : GLib.Object
     public static void
     save_all ()
     {
-        int nb = geany_data.main_widgets.documents_notebook.get_n_pages ();
-
-        for (uint cpt = 0; cpt < nb; ++cpt)
+        foreach (unowned Geany.Document? document in Geany.documents)
         {
-            unowned Geany.Document? document = Geany.Document.get_from_notebook_page (cpt);
             if (!document.has_changed) continue;
 
             document.save ();
@@ -1167,7 +1130,7 @@ public class GVT.Manager : GLib.Object
                 if (filename.has_prefix (prj.path + "/"))
                 {
                     prj.active = true;
-                    prj.remove_tag (filename);
+                    Geany.TagManager.Workspace.remove_object (inDocument.tm_file, false, false);
                     prj.add_open_file (filename);
                 }
                 else
@@ -1193,7 +1156,6 @@ public class GVT.Manager : GLib.Object
                     if (document == null || document.file_name == filename || !document.file_name.has_prefix (prj.path))
                     {
                         prj.active = false;
-                        prj.add_tag (filename);
                     }
                     prj.remove_open_file (filename);
                     break;
@@ -1232,7 +1194,6 @@ public class GVT.Manager : GLib.Object
                 if (filename.has_prefix (prj.path + "/"))
                 {
                     prj.active = true;
-                    prj.remove_tag (filename);
                 }
                 else
                 {
@@ -1292,208 +1253,216 @@ public class GVT.Manager : GLib.Object
     private Gtk.Menu
     create_popup_menu (Node inNode)
     {
-        var menu = new Gtk.Menu ();
-        menu.show ();
+        Gtk.Menu menu = inNode.get_data<Gtk.Menu> ("popup-menu");
 
-        if (inNode is Project)
+        if (menu == null)
         {
-            unowned Project project = (Project)inNode;
-            unowned Prj? prj = m_Projects.search <string> (project.name, (k, v) => {
-                return GLib.strcmp (k.project_name, v);
-            });
+            menu = new Gtk.Menu ();
+            inNode.set_data<Gtk.Menu> ("popup-menu", menu);
 
-            if (prj != null)
+            if (inNode is Project)
             {
-                var menu_configure = new Gtk.MenuItem.with_label ("Configure");
-                menu_configure.show ();
-                menu.add (menu_configure);
-
-                menu_configure.activate.connect (() => {
-                    m_ConfigureDialog.params = prj.configure_params;
-                    bool ret = m_ConfigureDialog.main ();
-                    message ("ret = %s", ret.to_string ());
-                    if (ret)
-                    {
-                        prj.configure (m_ConfigureDialog.params, m_ConfigureDialog.regenerate);
-                    }
-                });
-            }
-        }
-
-        if (inNode is Group)
-        {
-            unowned Group group = (Group)inNode;
-            unowned Project project = (Project)group.project;
-            unowned Prj? prj = m_Projects.search <string> (project.name, (k, v) => {
-                return GLib.strcmp (k.project_name, v);
-            });
-
-            if (prj != null)
-            {
-                var menu_build = new Gtk.MenuItem.with_label ("Build");
-                menu_build.show ();
-                menu.add (menu_build);
-
-                menu_build.activate.connect (() => {
-                    prj.build (group);
+                unowned Project project = (Project)inNode;
+                unowned Prj? prj = m_Projects.search <string> (project.name, (k, v) => {
+                    return GLib.strcmp (k.project_name, v);
                 });
 
-                var menu_clean = new Gtk.MenuItem.with_label ("Clean");
-                menu_clean.show ();
-                menu.add (menu_clean);
+                if (prj != null)
+                {
+                    var menu_configure = new Gtk.MenuItem.with_label ("Configure");
+                    menu_configure.show ();
+                    menu.add (menu_configure);
 
-                menu_clean.activate.connect (() => {
-                    prj.clean (group);
-                });
+                    menu_configure.activate.connect (() => {
+                        m_ConfigureDialog.params = prj.configure_params;
+                        bool ret = m_ConfigureDialog.main ();
+                        message ("ret = %s", ret.to_string ());
+                        if (ret)
+                        {
+                            prj.configure (m_ConfigureDialog.params, m_ConfigureDialog.regenerate);
+                        }
+                    });
+                }
             }
 
-            var separator1 = new Gtk.SeparatorMenuItem ();
-            separator1.show ();
-            menu.add (separator1);
-        }
-
-        if (inNode is Project)
-        {
-            unowned Project project = (Project)inNode;
-            string configure_in = project.path + "/configure.in";
-            string configure_ac = project.path + "/configure.ac";
-            string? configure = null;
-
-            if (GLib.FileUtils.test (configure_in, GLib.FileTest.EXISTS))
-                configure = configure_in;
-            else if (GLib.FileUtils.test (configure_ac, GLib.FileTest.EXISTS))
-                configure = configure_ac;
-            if (configure != null)
+            if (inNode is Group)
             {
-                var menu_configure = new Gtk.MenuItem.with_label ("Open configure");
-                menu_configure.show ();
-                menu.add (menu_configure);
-
-                menu_configure.activate.connect (() => {
-                    Geany.Document.open (configure);
+                unowned Group group = (Group)inNode;
+                unowned Project project = (Project)group.project;
+                unowned Prj? prj = m_Projects.search <string> (project.name, (k, v) => {
+                    return GLib.strcmp (k.project_name, v);
                 });
-            }
-        }
 
-        if (inNode is Group)
-        {
-            unowned Group group = (Group)inNode;
-            string makefile_am = group.path + "/Makefile.am";
+                if (prj != null)
+                {
+                    var menu_build = new Gtk.MenuItem.with_label ("Build");
+                    menu_build.show ();
+                    menu.add (menu_build);
 
-            if (GLib.FileUtils.test (makefile_am, GLib.FileTest.EXISTS))
-            {
-                var menu_makefile = new Gtk.MenuItem.with_label ("Open makefile");
-                menu_makefile.show ();
-                menu.add (menu_makefile);
+                    menu_build.activate.connect (() => {
+                        prj.build (group);
+                    });
 
-                menu_makefile.activate.connect (() => {
-                    Geany.Document.open (makefile_am);
-                });
-            }
-        }
+                    var menu_clean = new Gtk.MenuItem.with_label ("Clean");
+                    menu_clean.show ();
+                    menu.add (menu_clean);
 
-        if (inNode is Target)
-        {
-            unowned Target? target = (Target?)inNode;
-            unowned Group? group = (Group?)target.parent;
-            unowned Project project = (Project)group.project;
-            unowned Prj? prj = m_Projects.search <string> (project.name, (k, v) => {
-                return GLib.strcmp (k.project_name, v);
-            });
+                    menu_clean.activate.connect (() => {
+                        prj.clean (group);
+                    });
+                }
 
-            if (prj != null)
-            {
-                var menu_build = new Gtk.MenuItem.with_label ("Build %s".printf (target.name));
-                menu_build.show ();
-                menu.add (menu_build);
-
-                menu_build.activate.connect (() => {
-                    prj.build_target (target);
-                });
+                var separator1 = new Gtk.SeparatorMenuItem ();
+                separator1.show ();
+                menu.add (separator1);
             }
 
-            if (target.target_type == TargetType.EXECUTABLE)
+            if (inNode is Project)
             {
+                unowned Project project = (Project)inNode;
+                string configure_in = project.path + "/configure.in";
+                string configure_ac = project.path + "/configure.ac";
+                string? configure = null;
+
+                if (GLib.FileUtils.test (configure_in, GLib.FileTest.EXISTS))
+                    configure = configure_in;
+                else if (GLib.FileUtils.test (configure_ac, GLib.FileTest.EXISTS))
+                    configure = configure_ac;
+                if (configure != null)
+                {
+                    var menu_configure = new Gtk.MenuItem.with_label ("Open configure");
+                    menu_configure.show ();
+                    menu.add (menu_configure);
+
+                    menu_configure.activate.connect (() => {
+                        Geany.Document.open (configure);
+                    });
+                }
+            }
+
+            if (inNode is Group)
+            {
+                unowned Group group = (Group)inNode;
+                string makefile_am = group.path + "/Makefile.am";
+
+                if (GLib.FileUtils.test (makefile_am, GLib.FileTest.EXISTS))
+                {
+                    var menu_makefile = new Gtk.MenuItem.with_label ("Open makefile");
+                    menu_makefile.show ();
+                    menu.add (menu_makefile);
+
+                    menu_makefile.activate.connect (() => {
+                        Geany.Document.open (makefile_am);
+                    });
+                }
+            }
+
+            if (inNode is Target)
+            {
+                unowned Target? target = (Target?)inNode;
+                unowned Group? group = (Group?)target.parent;
+                unowned Project project = (Project)group.project;
+                unowned Prj? prj = m_Projects.search <string> (project.name, (k, v) => {
+                    return GLib.strcmp (k.project_name, v);
+                });
+
+                if (prj != null)
+                {
+                    var menu_build = new Gtk.MenuItem.with_label ("Build %s".printf (target.name));
+                    menu_build.show ();
+                    menu.add (menu_build);
+
+                    menu_build.activate.connect (() => {
+                        prj.build_target (target);
+                    });
+                }
+
+                if (target.target_type == TargetType.EXECUTABLE)
+                {
+                    var separator1 = new Gtk.SeparatorMenuItem ();
+                    separator1.show ();
+                    menu.add (separator1);
+
+                    var menu_execute = new Gtk.MenuItem.with_label ("Execute %s".printf (target.name));
+                    menu_execute.show ();
+                    menu.add (menu_execute);
+
+                    menu_execute.activate.connect (() => {
+                        Geany.MessageWindow.switch_tab (Geany.MessageWindow.TabID.VTE, true);
+                        // TODO: need to be exposed in geanyfunctions.h
+                        Geany.Vte.send_cmd (target.filename + "\n");
+                    });
+                }
+            }
+
+            if (inNode is Group)
+            {
+                unowned Group group = (Group)inNode;
+
                 var separator1 = new Gtk.SeparatorMenuItem ();
                 separator1.show ();
                 menu.add (separator1);
 
-                var menu_execute = new Gtk.MenuItem.with_label ("Execute %s".printf (target.name));
+                var menu_cwd = new Gtk.MenuItem.with_label ("Open %s".printf (group.path));
+                menu_cwd.show ();
+                menu.add (menu_cwd);
+
+                menu_cwd.activate.connect (() => {
+                    Geany.MessageWindow.switch_tab (Geany.MessageWindow.TabID.VTE, true);
+                    // TODO: need to be exposed in geanyfunctions.h
+                    Geany.Vte.cwd (group.path, true);
+                });
+            }
+
+            if (inNode is Project)
+            {
+                unowned Project project = (Project)inNode;
+                unowned Prj? prj = m_Projects.search <string> (project.name, (k, v) => {
+                    return GLib.strcmp (k.project_name, v);
+                });
+
+                var separator1 = new Gtk.SeparatorMenuItem ();
+                separator1.show ();
+                menu.add (separator1);
+
+                var menu_search = new Gtk.MenuItem.with_label ("Search");
+                menu_search.show ();
+                menu.add (menu_search);
+
+                menu_search.activate.connect (() => {
+                    SearchDialog dialog = new SearchDialog (prj, null);
+                    dialog.main ();
+                });
+
+                var separator2 = new Gtk.SeparatorMenuItem ();
+                separator2.show ();
+                menu.add (separator2);
+
+                var menu_execute = new Gtk.MenuItem.with_label ("Launch Diff Tool");
                 menu_execute.show ();
                 menu.add (menu_execute);
 
                 menu_execute.activate.connect (() => {
-                    Geany.MessageWindow.switch_tab (Geany.MessageWindow.TabID.VTE, true);
-                    Geany.Vte.send_cmd (target.filename + "\n");
+                    try
+                    {
+                        new Command (project.path, m_GlobalPrefs.diff_tool + " .");
+                    }
+                    catch (GLib.Error err)
+                    {
+                        warning ("Error on launching difftool: %s", err.message);
+                    }
+                });
+
+                var menu_close = new Gtk.MenuItem.with_label ("Close");
+                menu_close.show ();
+                menu.add (menu_close);
+
+                menu_close.activate.connect (() => {
+                    close_project ();
                 });
             }
         }
-
-        if (inNode is Group)
-        {
-            unowned Group group = (Group)inNode;
-
-            var separator1 = new Gtk.SeparatorMenuItem ();
-            separator1.show ();
-            menu.add (separator1);
-
-            var menu_cwd = new Gtk.MenuItem.with_label ("Open %s".printf (group.path));
-            menu_cwd.show ();
-            menu.add (menu_cwd);
-
-            menu_cwd.activate.connect (() => {
-                Geany.MessageWindow.switch_tab (Geany.MessageWindow.TabID.VTE, true);
-                Geany.Vte.cwd (group.path, true);
-            });
-        }
-
-        if (inNode is Project)
-        {
-            unowned Project project = (Project)inNode;
-            unowned Prj? prj = m_Projects.search <string> (project.name, (k, v) => {
-                return GLib.strcmp (k.project_name, v);
-            });
-
-            var separator1 = new Gtk.SeparatorMenuItem ();
-            separator1.show ();
-            menu.add (separator1);
-
-            var menu_search = new Gtk.MenuItem.with_label ("Search");
-            menu_search.show ();
-            menu.add (menu_search);
-
-            menu_search.activate.connect (() => {
-                SearchDialog dialog = new SearchDialog (prj, null);
-                dialog.main ();
-            });
-
-            var separator2 = new Gtk.SeparatorMenuItem ();
-            separator2.show ();
-            menu.add (separator2);
-
-            var menu_execute = new Gtk.MenuItem.with_label ("Launch Diff Tool");
-            menu_execute.show ();
-            menu.add (menu_execute);
-
-            menu_execute.activate.connect (() => {
-                try
-                {
-                    new Command (project.path, m_GlobalPrefs.diff_tool + " .");
-                }
-                catch (GLib.Error err)
-                {
-                    warning ("Error on launching difftool: %s", err.message);
-                }
-            });
-
-            var menu_close = new Gtk.MenuItem.with_label ("Close");
-            menu_close.show ();
-            menu.add (menu_close);
-
-            menu_close.activate.connect (() => {
-                close_project ();
-            });
-        }
+        menu.show ();
 
         return menu;
     }
@@ -1501,13 +1470,13 @@ public class GVT.Manager : GLib.Object
     private void
     create_tool_menu ()
     {
-        m_ProjectMenu = new Gtk.MenuItem.with_mnemonic ("GVT _Project");
-        m_ProjectMenu.show ();
-        geany_data.main_widgets.tools_menu.add (m_ProjectMenu);
+        var project_menu = new Gtk.MenuItem.with_mnemonic ("GVT _Project");
+        project_menu.show ();
+        geany_data.main_widgets.tools_menu.add (project_menu);
 
         var menu = new Gtk.Menu ();
         menu.show ();
-        m_ProjectMenu.set_submenu (menu);
+        project_menu.set_submenu (menu);
 
         var open_menu = new Gtk.ImageMenuItem.with_mnemonic ("_Open");
         open_menu.image = new Gtk.Image.from_stock (Gtk.Stock.OPEN, Gtk.IconSize.MENU);
@@ -1794,10 +1763,11 @@ public class GVT.Manager : GLib.Object
             {
                 if (filename.has_prefix (prj.path + "/"))
                 {
+                    // TODO: need to be exposed in geanyfunctions.h
                     string? sel = document.editor.get_default_selection (true);
 
                     debug ("Launch find in project %s", prj.name);
-                    //Geany.Search.show_find_in_files_dialog (prj.path);
+
                     SearchDialog dialog = new SearchDialog (prj, sel);
                     dialog.main ();
                     break;
