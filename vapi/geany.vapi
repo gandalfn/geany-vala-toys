@@ -615,8 +615,10 @@ namespace Geany {
         public TagManager.WorkObject? tm_file { /* needs better name? */
             [CCode (cname = "geany_vala_plugin_document_get_tm_file")]
             get { return _tm_file; }
+            [CCode (cname = "geany_vala_plugin_document_set_tm_file")]
+            set { _tm_file = value; }
         }
-        [CCode (cname = "tm_file")] TagManager.WorkObject? _tm_file;
+        [CCode (cname = "tm_file")] unowned TagManager.WorkObject? _tm_file;
 
         /**
          * Gets the {@link Gtk.Notebook} page index for this document.

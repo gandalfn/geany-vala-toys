@@ -81,7 +81,6 @@ public void
 plugin_init (Geany.Data inData)
 {
     s_Manager = new GVT.Manager ();
-    s_Manager.unref ();
     message ("manager: %u", s_Manager.ref_count);
 }
 

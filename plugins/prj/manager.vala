@@ -206,7 +206,7 @@ public class GVT.Manager : GLib.Object
         private Autotools                     m_Autotools;
         private Project                       m_Project;
         private Geany.TagManager.SourceFile[] m_TmFiles = {};
-        private Gtk.TreeIter                  m_IterRoot;
+        private Gtk.TreePath                  m_RootPath;
         private int                           m_Update = 0;
 
         // accessors
@@ -241,7 +241,16 @@ public class GVT.Manager : GLib.Object
                         debug ("set %s active", name);
                         foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
                         {
-                            Geany.TagManager.Workspace.add_object (file);
+                            unowned Geany.Document? doc = Geany.Document.find_by_filename (file.file_name);
+                            if (doc != null)
+                                Geany.TagManager.Workspace.add_object (doc.tm_file);
+                            else
+                                Geany.TagManager.Workspace.add_object (file);
+                        }
+
+                        foreach (unowned string file in m_Prefs.current_files)
+                        {
+
                         }
                     }
                     else
@@ -250,6 +259,15 @@ public class GVT.Manager : GLib.Object
                         foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
                         {
                             Geany.TagManager.Workspace.remove_object (file, false, false);
+                        }
+
+                        foreach (unowned string file in m_Prefs.current_files)
+                        {
+                            unowned Geany.Document? doc = Geany.Document.find_by_filename (file);
+                            if (doc != null)
+                            {
+                                Geany.TagManager.Workspace.remove_object (doc.tm_file, false, false);
+                            }
                         }
                     }
                 }
@@ -267,8 +285,10 @@ public class GVT.Manager : GLib.Object
         {
             m_Active = false;
             m_GlobalPrefs = inManager.m_GlobalPrefs;
-            m_TreeStore = inManager.m_TreeStore;
             m_TreeView = inManager.m_TreeView;
+            m_TreeStore = inManager.m_TreeStore;
+            m_TreeStore.row_deleted.connect (on_row_deleted);
+
             m_Autotools = new Autotools ();
             m_Autotools.message.connect ((s) => {
                 Geany.MessageWindow.compiler_add (Geany.MessageWindow.Color.BLACK, s);
@@ -281,6 +301,7 @@ public class GVT.Manager : GLib.Object
                 Geany.Ui.progress_bar_stop ();
                 s_CommandLaunched = false;
             });
+
             m_Project = m_Autotools.parse (inPath);
 
             m_Prefs = new Prefs (m_Project);
@@ -288,8 +309,11 @@ public class GVT.Manager : GLib.Object
             // Fill manager tree store
             Gdk.Pixbuf icon = Manager.pixbuf_from_stock (Gtk.Stock.DIRECTORY);
 
-            m_TreeStore.append (out m_IterRoot, null);
-            m_TreeStore.set (m_IterRoot, 0, icon, 1, name, 2, m_Project);
+            Gtk.TreeIter root;
+            m_TreeStore.append (out root, null);
+            m_TreeStore.set (root, 0, icon, 1, name, 2, m_Project);
+            m_RootPath = m_TreeStore.get_path (root);
+
 
             // Add to recent project openned
             add_recent_project ();
@@ -297,11 +321,17 @@ public class GVT.Manager : GLib.Object
 
         ~Prj ()
         {
-            active = false;
-            m_TreeStore.remove (ref m_IterRoot);
-            foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
+            close ();
+            m_TreeView.parent.remove (m_TreeView);
+        }
+
+        private void
+        on_row_deleted (Gtk.TreePath inPath)
+        {
+            if (inPath.get_depth () == m_RootPath.get_depth () &&
+                inPath.compare (m_RootPath) < 0)
             {
-                Geany.TagManager.Workspace.remove_object (file, false, true);
+                m_RootPath.prev ();
             }
         }
 
@@ -429,9 +459,6 @@ public class GVT.Manager : GLib.Object
             inGroup.updated.connect (() => {
                 on_group_updated (iter);
             });
-
-            // workaround for valac 0.12 which does not support owned/unowned delegate
-            unref ();
         }
 
         private async void
@@ -630,14 +657,30 @@ public class GVT.Manager : GLib.Object
         load ()
         {
             debug ("Load %s", name);
-            m_TreeStore.set (m_IterRoot, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH));
+            Gtk.TreeIter root;
+            m_TreeStore.get_iter (out root, m_RootPath);
+            m_TreeStore.set (root, 0, Manager.pixbuf_from_stock (Gtk.Stock.REFRESH));
             foreach (unowned Item? item in m_Project)
             {
-                yield add_item (m_IterRoot, item);
+                yield add_item (root, item);
                 GLib.Idle.add_full (GLib.Priority.LOW, load.callback);
                 yield;
             }
-            m_TreeStore.set (m_IterRoot, 0, Manager.pixbuf_from_stock (Gtk.Stock.DIRECTORY));
+            m_TreeStore.set (root, 0, Manager.pixbuf_from_stock (Gtk.Stock.DIRECTORY));
+        }
+
+        public void
+        close ()
+        {
+            active = false;
+            Gtk.TreeIter root;
+            m_TreeStore.get_iter (out root, m_RootPath);
+            m_TreeStore.remove (ref root);
+            foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
+            {
+                Geany.TagManager.Workspace.remove_object (file, false, true);
+            }
+            m_Project = null;
         }
 
         public async void
@@ -846,6 +889,40 @@ public class GVT.Manager : GLib.Object
         }
 
         public void
+        add_tag (string inFilename)
+        {
+            string filename= inFilename.substring (m_Project.path.length + 1);
+            unowned Item? item = m_Project.find_path (filename);
+            if (item != null && item is Source)
+            {
+                unowned Source? source = (Source?)item;
+                unowned Geany.TagManager.SourceFile? tm_file = source.get_data<unowned Geany.TagManager.SourceFile> ("tm-file");
+                if (tm_file != null)
+                {
+                    debug ("add tag of %s", source.name);
+                    Geany.TagManager.Workspace.add_object (tm_file);
+                }
+            }
+        }
+
+        public void
+        remove_tag (string inFilename)
+        {
+            string filename= inFilename.substring (m_Project.path.length + 1);
+            unowned Item? item = m_Project.find_path (filename);
+            if (item != null && item is Source)
+            {
+                unowned Source? source = (Source?)item;
+                unowned Geany.TagManager.SourceFile? tm_file = source.get_data<unowned Geany.TagManager.SourceFile> ("tm-file");
+                if (tm_file != null)
+                {
+                    debug ("remove tag of %s", source.name);
+                    Geany.TagManager.Workspace.remove_object (tm_file, false, false);
+                }
+            }
+        }
+
+        public void
         add_open_file (string inFilename)
         {
             m_Prefs.add_file (inFilename);
@@ -1024,14 +1101,15 @@ public class GVT.Manager : GLib.Object
     }
 
     // static properties
-    static bool                s_CommandLaunched = false;
+    static bool                     s_CommandLaunched = false;
 
     // properties
-    private GlobalPrefs        m_GlobalPrefs;
-    private Set<Prj>           m_Projects;
-    private Gtk.TreeView       m_TreeView;
-    private Gtk.TreeStore      m_TreeStore;
-    private AskConfigureParams m_ConfigureDialog;
+    private GlobalPrefs             m_GlobalPrefs;
+    private Set<Prj>                m_Projects;
+    private Gtk.TreeView            m_TreeView;
+    private Gtk.TreeStore           m_TreeStore;
+    private AskConfigureParams      m_ConfigureDialog;
+    private Gtk.RecentChooserMenu   m_RecentChooserMenu;
 
     // static methods
     public static inline unowned Geany.Filetype?
@@ -1115,7 +1193,15 @@ public class GVT.Manager : GLib.Object
 
     ~Manager ()
     {
-        m_Projects.clear ();
+        if (m_Projects != null)
+        {
+            foreach (unowned Prj prj in m_Projects)
+            {
+                prj.close ();
+            }
+
+            m_Projects.clear ();
+        }
     }
 
     [CCode (instance_pos = -1)]
@@ -1130,7 +1216,7 @@ public class GVT.Manager : GLib.Object
                 if (filename.has_prefix (prj.path + "/"))
                 {
                     prj.active = true;
-                    Geany.TagManager.Workspace.remove_object (inDocument.tm_file, false, false);
+                    prj.remove_tag (filename);
                     prj.add_open_file (filename);
                 }
                 else
@@ -1157,6 +1243,8 @@ public class GVT.Manager : GLib.Object
                     {
                         prj.active = false;
                     }
+                    else
+                        prj.add_tag (filename);
                     prj.remove_open_file (filename);
                     break;
                 }
@@ -1206,7 +1294,7 @@ public class GVT.Manager : GLib.Object
     private void
     close_project ()
     {
-        Gtk.TreeModel model;
+        unowned Gtk.TreeModel? model;
         Gtk.TreeIter iter;
 
         if (m_TreeView.get_selection ().get_selected (out model, out iter))
@@ -1224,8 +1312,8 @@ public class GVT.Manager : GLib.Object
                 if (prj != null)
                 {
                     files = prj.get_open_files ();
+                    prj.close ();
                     m_Projects.remove (prj);
-                    prj.unref ();
                 }
 
                 string[] c = {};
@@ -1472,7 +1560,7 @@ public class GVT.Manager : GLib.Object
     {
         var project_menu = new Gtk.MenuItem.with_mnemonic ("GVT _Project");
         project_menu.show ();
-        geany_data.main_widgets.tools_menu.add (project_menu);
+        geany_data.main_widgets.tools_menu.append (project_menu);
 
         var menu = new Gtk.Menu ();
         menu.show ();
@@ -1494,39 +1582,43 @@ public class GVT.Manager : GLib.Object
         recent_menu.show ();
         menu.add (recent_menu);
 
-        var recent_chooser_menu = new Gtk.RecentChooserMenu.for_manager (Gtk.RecentManager.get_default ());
+        m_RecentChooserMenu = new Gtk.RecentChooserMenu.for_manager (Gtk.RecentManager.get_default ());
         var filter = new Gtk.RecentFilter ();
         filter.add_group ("gvtprojects");
-        recent_chooser_menu.set_filter (filter);
-        recent_chooser_menu.item_activated.connect (() => {
-            try
-            {
-                Prj prj = new Prj (this, Filename.from_uri (recent_chooser_menu.get_current_uri ()));
-                m_Projects.insert (prj);
-                prj.load.begin (() => {
-                    string[] c = {};
-                    foreach (unowned Prj p in m_Projects)
-                    {
-                        c += p.path;
-                    }
-                    c += null;
-                    m_GlobalPrefs.current_projects = c;
-                    m_GlobalPrefs.save ();
+        m_RecentChooserMenu.set_filter (filter);
+        m_RecentChooserMenu.item_activated.connect (on_recent_menu_activate);
+        m_RecentChooserMenu.show ();
+        recent_menu.set_submenu (m_RecentChooserMenu);
+    }
 
-                    GLib.SList<string> files = prj.get_open_files ();
-                    if (files != null)
-                    {
-                        Geany.Document.open_files (files);
-                    }
-                });
-            }
-            catch (GLib.Error err)
-            {
-                critical (err.message);
-            }
-        });
-        recent_chooser_menu.show ();
-        recent_menu.set_submenu (recent_chooser_menu);
+    private void
+    on_recent_menu_activate ()
+    {
+        try
+        {
+            Prj prj = new Prj (this, Filename.from_uri (m_RecentChooserMenu.get_current_uri ()));
+            m_Projects.insert (prj);
+            prj.load.begin (() => {
+                string[] c = {};
+                foreach (unowned Prj p in m_Projects)
+                {
+                    c += p.path;
+                }
+                c += null;
+                m_GlobalPrefs.current_projects = c;
+                m_GlobalPrefs.save ();
+
+                GLib.SList<string> files = prj.get_open_files ();
+                if (files != null)
+                {
+                    Geany.Document.open_files (files);
+                }
+            });
+        }
+        catch (GLib.Error err)
+        {
+            critical (err.message);
+        }
     }
 
     private Gtk.TreeView
@@ -1569,7 +1661,8 @@ public class GVT.Manager : GLib.Object
         m_TreeView.row_activated.connect (on_row_activated);
         m_TreeView.button_press_event.connect (on_treeview_clicked);
 
-        geany_data.main_widgets.sidebar_notebook.append_page (scrolled_window, new Gtk.Label ("GVT Project"));
+        var label = new Gtk.Label ("GVT Project");
+        geany_data.main_widgets.sidebar_notebook.append_page ((owned)scrolled_window, (owned)label);
     }
 
     private void
