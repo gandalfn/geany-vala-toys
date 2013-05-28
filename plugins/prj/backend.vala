@@ -25,7 +25,7 @@ public abstract class GVT.Backend : GLib.Object
     public signal void completed (string inCmd, int inStatus);
 
     // methods
-    public abstract Project? parse (string inPath);
+    public abstract async Project? parse (string inPath);
     public abstract bool configure (Project inProject, string inParams, bool inRegenerate);
     public abstract bool build (string inPath, string inParams);
     public abstract bool clean (string inPath);

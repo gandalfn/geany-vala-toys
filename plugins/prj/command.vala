@@ -49,13 +49,13 @@ public class GVT.Command : GLib.Object
             m_Stdout.set_flags (m_Stdout.get_flags () | GLib.IOFlags.NONBLOCK);
             m_Stdout.set_encoding (null);
             m_Stdout.set_close_on_unref (true);
-            m_Stdout.add_watch (GLib.IOCondition.IN | GLib.IOCondition.HUP, on_output_message);
+            m_Stdout.add_watch_full (Priority.LOW, GLib.IOCondition.IN | GLib.IOCondition.HUP, on_output_message);
 
             m_Stderr = new GLib.IOChannel.unix_new (fd_stderr);
             m_Stderr.set_flags (m_Stderr.get_flags () | GLib.IOFlags.NONBLOCK);
             m_Stderr.set_encoding (null);
             m_Stderr.set_close_on_unref (true);
-            m_Stderr.add_watch (GLib.IOCondition.IN | GLib.IOCondition.HUP, on_output_message);
+            m_Stderr.add_watch_full (Priority.LOW, GLib.IOCondition.IN | GLib.IOCondition.HUP, on_output_message);
 
             GLib.ChildWatch.add (pid, on_child_finished);
         }

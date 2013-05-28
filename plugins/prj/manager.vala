@@ -199,6 +199,7 @@ public class GVT.Manager : GLib.Object
     {
         // properties
         private bool                          m_Active;
+        private bool                          m_Parsing;
         private unowned GlobalPrefs           m_GlobalPrefs;
         private Prefs                         m_Prefs;
         private unowned Gtk.TreeStore         m_TreeStore;
@@ -242,15 +243,11 @@ public class GVT.Manager : GLib.Object
                         foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
                         {
                             unowned Geany.Document? doc = Geany.Document.find_by_filename (file.file_name);
-                            if (doc != null)
-                                Geany.TagManager.Workspace.add_object (doc.tm_file);
-                            else
+                            if (doc == null)
+                            {
                                 Geany.TagManager.Workspace.add_object (file);
-                        }
-
-                        foreach (unowned string file in m_Prefs.current_files)
-                        {
-
+                                file.update (true, false, true);
+                            }
                         }
                     }
                     else
@@ -258,15 +255,10 @@ public class GVT.Manager : GLib.Object
                         debug ("set %s inactive", name);
                         foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
                         {
-                            Geany.TagManager.Workspace.remove_object (file, false, false);
-                        }
-
-                        foreach (unowned string file in m_Prefs.current_files)
-                        {
-                            unowned Geany.Document? doc = Geany.Document.find_by_filename (file);
-                            if (doc != null)
+                            unowned Geany.Document? doc = Geany.Document.find_by_filename (file.file_name);
+                            if (doc == null)
                             {
-                                Geany.TagManager.Workspace.remove_object (doc.tm_file, false, false);
+                                Geany.TagManager.Workspace.remove_object (file, false, false);
                             }
                         }
                     }
@@ -279,6 +271,9 @@ public class GVT.Manager : GLib.Object
                 return m_Prefs.last_configure_params;
             }
         }
+
+        // signals
+        public signal void end_parsing ();
 
         // methods
         public Prj (Manager inManager, string inPath)
@@ -302,21 +297,27 @@ public class GVT.Manager : GLib.Object
                 s_CommandLaunched = false;
             });
 
-            m_Project = m_Autotools.parse (inPath);
+            m_Parsing = true;
+            m_Autotools.parse.begin (inPath, (obj, res) => {
+                m_Parsing = false;
 
-            m_Prefs = new Prefs (m_Project);
+                m_Project = m_Autotools.parse.end (res);
 
-            // Fill manager tree store
-            Gdk.Pixbuf icon = Manager.pixbuf_from_stock (Gtk.Stock.DIRECTORY);
+                m_Prefs = new Prefs (m_Project);
 
-            Gtk.TreeIter root;
-            m_TreeStore.append (out root, null);
-            m_TreeStore.set (root, 0, icon, 1, name, 2, m_Project);
-            m_RootPath = m_TreeStore.get_path (root);
+                // Fill manager tree store
+                Gdk.Pixbuf icon = Manager.pixbuf_from_stock (Gtk.Stock.DIRECTORY);
 
+                Gtk.TreeIter root;
+                m_TreeStore.append (out root, null);
+                m_TreeStore.set (root, 0, icon, 1, name, 2, m_Project);
+                m_RootPath = m_TreeStore.get_path (root);
 
-            // Add to recent project openned
-            add_recent_project ();
+                // Add to recent project openned
+                add_recent_project ();
+
+                end_parsing ();
+            });
         }
 
         ~Prj ()
@@ -631,16 +632,15 @@ public class GVT.Manager : GLib.Object
             {
                 var dis = new DataInputStream (file.read ());
                 string line = null;
+                size_t size;
                 int num_line = 0;
-                while ((line = yield dis.read_line_async (Priority.DEFAULT)) != null)
+                while ((line = yield dis.read_line_utf8_async (Priority.LOW, null, out size)) != null)
                 {
-                    size_t r,w;
-                    string line_utf8 = line.locale_to_utf8 (line.length, out r, out w);
                     num_line++;
-                    if (line_utf8 != null && inRegex.match (line_utf8))
+                    if (inRegex.match (line))
                     {
                         string path = inFilename.substring (m_Project.path.length + 1);
-                        Geany.MessageWindow.msg_add (Geany.MessageWindow.Color.BLACK, -1, null, "%s:%i: %s", path, num_line, line_utf8);
+                        Geany.MessageWindow.msg_add (Geany.MessageWindow.Color.BLACK, -1, null, "%s:%i: %s", path, num_line, line);
                         nb_matches++;
                     }
                 }
@@ -656,6 +656,12 @@ public class GVT.Manager : GLib.Object
         public async void
         load ()
         {
+            if (m_Parsing)
+            {
+                end_parsing.connect (() => { load.callback (); });
+                yield;
+            }
+
             debug ("Load %s", name);
             Gtk.TreeIter root;
             m_TreeStore.get_iter (out root, m_RootPath);
@@ -749,9 +755,12 @@ public class GVT.Manager : GLib.Object
                 Geany.MessageWindow.switch_tab (Geany.MessageWindow.TabID.COMPILER, true);
                 Geany.MessageWindow.clear_tab (Geany.MessageWindow.TabID.COMPILER);
                 Geany.MessageWindow.compiler_add (Geany.MessageWindow.Color.BLUE, "Launching %s %s", !inRegenerate ? "./configure" : "./autogen.sh", inParams);
-                Geany.Ui.progress_bar_start (null);
-                s_CommandLaunched = m_Autotools.configure (m_Project, inParams, inRegenerate);
                 m_Prefs.last_configure_params = inParams;
+                s_CommandLaunched = m_Autotools.configure (m_Project, inParams, inRegenerate);
+                if (s_CommandLaunched)
+                {
+                    Geany.Ui.progress_bar_start (null);
+                }
             }
         }
 
@@ -771,7 +780,6 @@ public class GVT.Manager : GLib.Object
                 Geany.MessageWindow.switch_tab (Geany.MessageWindow.TabID.COMPILER, true);
                 Geany.MessageWindow.clear_tab (Geany.MessageWindow.TabID.COMPILER);
                 Geany.MessageWindow.compiler_add (Geany.MessageWindow.Color.BLUE, "Launching build...");
-                Geany.Ui.progress_bar_start (null);
                 string params = "";
 
                 if (m_GlobalPrefs.build_job > 1)
@@ -782,6 +790,10 @@ public class GVT.Manager : GLib.Object
                 geany_data.build_info.dir = working_path;
                 geany_data.build_info.file_type_id = Geany.FiletypeID.MAKE;
                 s_CommandLaunched = m_Autotools.build (inGroup.path, params);
+                if (s_CommandLaunched)
+                {
+                    Geany.Ui.progress_bar_start (null);
+                }
             }
         }
 
@@ -795,7 +807,6 @@ public class GVT.Manager : GLib.Object
                 Geany.MessageWindow.switch_tab (Geany.MessageWindow.TabID.COMPILER, true);
                 Geany.MessageWindow.clear_tab (Geany.MessageWindow.TabID.COMPILER);
                 Geany.MessageWindow.compiler_add (Geany.MessageWindow.Color.BLUE, "Launching build of %s ...", inTarget.name);
-                Geany.Ui.progress_bar_start (null);
                 string params = "";
 
                 if (m_GlobalPrefs.build_job > 1)
@@ -807,6 +818,10 @@ public class GVT.Manager : GLib.Object
                 geany_data.build_info.dir = working_path;
                 geany_data.build_info.file_type_id = Geany.FiletypeID.MAKE;
                 s_CommandLaunched = m_Autotools.build (group.path, params);
+                if (s_CommandLaunched)
+                {
+                    Geany.Ui.progress_bar_start (null);
+                }
             }
         }
 
@@ -853,9 +868,12 @@ public class GVT.Manager : GLib.Object
                 Geany.MessageWindow.switch_tab (Geany.MessageWindow.TabID.COMPILER, true);
                 Geany.MessageWindow.clear_tab (Geany.MessageWindow.TabID.COMPILER);
                 Geany.MessageWindow.compiler_add (Geany.MessageWindow.Color.BLUE, "Launching clean ...");
-                Geany.Ui.progress_bar_start (null);
 
                 s_CommandLaunched = m_Autotools.clean (inGroup.path);
+                if (s_CommandLaunched)
+                {
+                    Geany.Ui.progress_bar_start (null);
+                }
             }
         }
 
@@ -883,7 +901,7 @@ public class GVT.Manager : GLib.Object
                 if (tm_file != null)
                 {
                     debug ("update tag of %s", source.name);
-                    tm_file.update (true, false, false);
+                    tm_file.update (true, false, true);
                 }
             }
         }
@@ -938,10 +956,18 @@ public class GVT.Manager : GLib.Object
     private class SearchDialog : Gtk.Dialog
     {
         // properties
-        private unowned Prj?           m_Prj;
+        private bool                   m_Working;
         private unowned Gtk.Entry?     m_Entry;
+        private Gtk.ComboBoxEntry      m_Combo;
         private GLib.RegexCompileFlags m_Flags = GLib.RegexCompileFlags.CASELESS |
                                                  GLib.RegexCompileFlags.OPTIMIZE;
+
+        // accessors
+        public bool is_working {
+            get {
+                return m_Working;
+            }
+        }
 
         // methods
         construct
@@ -957,18 +983,18 @@ public class GVT.Manager : GLib.Object
             var label = new Gtk.Label.with_mnemonic ("_Search for:");
             label.set_alignment (0, 0.5f);
 
-            var entry = new Gtk.ComboBoxEntry.text ();
+            m_Combo = new Gtk.ComboBoxEntry.text ();
 
-            m_Entry = entry.get_child () as Gtk.Entry;
+            m_Entry = m_Combo.get_child () as Gtk.Entry;
             m_Entry.set_activates_default (true);
             Geany.Ui.entry_add_clear_icon (m_Entry);
             label.set_mnemonic_widget (m_Entry);
             m_Entry.set_width_chars (50);
-            Geany.Ui.hookup_widget (this, entry, "entry");
+            Geany.Ui.hookup_widget (this, m_Combo, "entry");
 
             var sbox = new Gtk.HBox (false, 6);
             sbox.pack_start(label, false, false, 0);
-            sbox.pack_start(entry, true, true, 0);
+            sbox.pack_start(m_Combo, true, true, 0);
             vbox.pack_start(sbox, true, false, 0);
 
             var checkbox1 = new Gtk.CheckButton.with_mnemonic ("C_ase sensitive");
@@ -985,21 +1011,22 @@ public class GVT.Manager : GLib.Object
             vbox.add (sbox);
         }
 
-        public SearchDialog (Prj inPrj, string? inSelection)
+        public SearchDialog ()
         {
-            m_Prj = inPrj;
-            set_title ("Find in project %s".printf (inPrj.name));
             set_transient_for (geany_data.main_widgets.window);
             destroy_with_parent = true;
+        }
+
+        public void
+        main (Prj inPrj, string? inSelection)
+        {
+            set_title ("Find in project %s".printf (inPrj.name));
+
             if (inSelection != null)
             {
                 m_Entry.set_text (inSelection);
             }
-        }
 
-        public void
-        main ()
-        {
             show_all ();
             Gtk.ResponseType response = (Gtk.ResponseType)run ();
             if (response == Gtk.ResponseType.ACCEPT && m_Entry.get_text ().length > 0)
@@ -1007,7 +1034,9 @@ public class GVT.Manager : GLib.Object
                 try
                 {
                     GLib.Regex regex = new GLib.Regex (m_Entry.get_text (), m_Flags);
-                    m_Prj.search.begin (regex);
+                    m_Working = true;
+                    Geany.Ui.combo_box_add_to_history (m_Combo, m_Entry.get_text ());
+                    inPrj.search.begin (regex, () => { m_Working = false; });
                 }
                 catch (GLib.Error err)
                 {
@@ -1110,6 +1139,7 @@ public class GVT.Manager : GLib.Object
     private Gtk.TreeStore           m_TreeStore;
     private AskConfigureParams      m_ConfigureDialog;
     private Gtk.RecentChooserMenu   m_RecentChooserMenu;
+    private SearchDialog            m_SearchDialog;
 
     // static methods
     public static inline unowned Geany.Filetype?
@@ -1159,14 +1189,18 @@ public class GVT.Manager : GLib.Object
         // Create configure dialog
         m_ConfigureDialog = new AskConfigureParams ();
 
+        // Create search dialog
+        m_SearchDialog = new SearchDialog ();
+
         // Load last projects
         if (m_GlobalPrefs.current_projects.length > 0)
         {
             foreach (string project in m_GlobalPrefs.current_projects)
             {
                 Prj prj = new Prj (this, project);
-                m_Projects.insert (prj);
-                prj.load.begin ();
+                prj.load.begin (() => {
+                    m_Projects.insert (prj);
+                });
             }
         }
 
@@ -1301,8 +1335,7 @@ public class GVT.Manager : GLib.Object
         {
             unowned Item item;
             m_TreeStore.get (iter, 2, out item);
-            for (;item != null && !(item is Project); item = item.parent);
-            if (item != null)
+            if (item is Project)
             {
                 debug ("Close %s", item.name);
                 unowned Prj? prj = m_Projects.search <string> (item.name, (k, v) => {
@@ -1311,9 +1344,9 @@ public class GVT.Manager : GLib.Object
                 GLib.SList<string> files = null;
                 if (prj != null)
                 {
+                    m_Projects.remove (prj);
                     files = prj.get_open_files ();
                     prj.close ();
-                    m_Projects.remove (prj);
                 }
 
                 string[] c = {};
@@ -1518,8 +1551,10 @@ public class GVT.Manager : GLib.Object
                 menu.add (menu_search);
 
                 menu_search.activate.connect (() => {
-                    SearchDialog dialog = new SearchDialog (prj, null);
-                    dialog.main ();
+                    if (!m_SearchDialog.is_working)
+                    {
+                        m_SearchDialog.main (prj, null);
+                    }
                 });
 
                 var separator2 = new Gtk.SeparatorMenuItem ();
@@ -1597,8 +1632,9 @@ public class GVT.Manager : GLib.Object
         try
         {
             Prj prj = new Prj (this, Filename.from_uri (m_RecentChooserMenu.get_current_uri ()));
-            m_Projects.insert (prj);
             prj.load.begin (() => {
+                m_Projects.insert (prj);
+
                 string[] c = {};
                 foreach (unowned Prj p in m_Projects)
                 {
@@ -1678,8 +1714,9 @@ public class GVT.Manager : GLib.Object
         if (response == Gtk.ResponseType.OK)
         {
             Prj prj = new Prj (this, dialog.get_filename ());
-            m_Projects.insert (prj);
             prj.load.begin (() => {
+                m_Projects.insert (prj);
+
                 string[] c = {};
                 foreach (unowned Prj p in m_Projects)
                 {
@@ -1849,7 +1886,7 @@ public class GVT.Manager : GLib.Object
     kb_find ()
     {
         unowned Geany.Document? document = Geany.Document.get_current ();
-        if (document != null)
+        if (!m_SearchDialog.is_working && document != null)
         {
             string filename = document.file_name;
             foreach (unowned Prj? prj in m_Projects)
@@ -1861,8 +1898,7 @@ public class GVT.Manager : GLib.Object
 
                     debug ("Launch find in project %s", prj.name);
 
-                    SearchDialog dialog = new SearchDialog (prj, sel);
-                    dialog.main ();
+                    m_SearchDialog.main (prj, sel);
                     break;
                 }
             }

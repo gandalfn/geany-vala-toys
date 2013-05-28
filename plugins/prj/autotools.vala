@@ -79,7 +79,7 @@ public class GVT.Autotools : Backend
     }
 
     // properties
-    private class GLib.Regex?[] c_Regexs;
+    private static GLib.Regex?[] s_Regexs;
 
     // static methods
     private static string?
@@ -108,12 +108,12 @@ public class GVT.Autotools : Backend
     }
 
     // class methods
-    class construct
+    static construct
     {
-        c_Regexs = new GLib.Regex? [RegexType.N];
+        s_Regexs = new GLib.Regex? [RegexType.N];
         for (int cpt = 0; cpt < RegexType.N; ++cpt)
         {
-            c_Regexs[cpt] = ((RegexType)cpt).get ();
+            s_Regexs[cpt] = ((RegexType)cpt).get ();
         }
     }
 
@@ -152,13 +152,13 @@ public class GVT.Autotools : Backend
                 unowned Group? group = inSender.get_data ("group");
                 if (group != null)
                 {
-                    refresh_group (group);
+                    refresh_group.begin (group);
                 }
             }
         }
     }
 
-    private void
+    private async void
     refresh_group (Group inGroup)
     {
         // Remove all targets and datas
@@ -179,9 +179,9 @@ public class GVT.Autotools : Backend
         inGroup.clear_variables ();
 
         // Reparse makefile.am
-        parse_file_am (inGroup, inGroup.path + "/Makefile.am");
-        parse_targets (inGroup);
-        parse_datas (inGroup);
+        yield parse_file_am (inGroup, inGroup.path + "/Makefile.am");
+        yield parse_targets (inGroup);
+        yield parse_datas (inGroup);
 
         inGroup.updated ();
     }
@@ -193,7 +193,7 @@ public class GVT.Autotools : Backend
 
         GLib.MatchInfo match;
 
-        if (c_Regexs[RegexType.RESOLV_PROJECT_VARIABLE].match (ret, RegexMatchFlags.NEWLINE_ANY, out match))
+        if (s_Regexs[RegexType.RESOLV_PROJECT_VARIABLE].match (ret, RegexMatchFlags.NEWLINE_ANY, out match))
         {
             unowned Variable? resolv = inProject.variables.search<string> (match.fetch (2), (v, k) => {
                 return GLib.strcmp (v.name, k);
@@ -217,13 +217,13 @@ public class GVT.Autotools : Backend
         string ret = inVal.strip ();
 
         GLib.MatchInfo match;
-        if (c_Regexs[RegexType.RESOLV_VARIABLE_1].match (ret, RegexMatchFlags.NEWLINE_ANY, out match))
+        if (s_Regexs[RegexType.RESOLV_VARIABLE_1].match (ret, RegexMatchFlags.NEWLINE_ANY, out match))
         {
             ret = match.fetch(1) + resolv_variable (inGroup, "$(" + match.fetch(2) + ")") + match.fetch(4);
         }
         else
         {
-            if (c_Regexs[RegexType.RESOLV_VARIABLE_2].match (ret, RegexMatchFlags.NEWLINE_ANY, out match))
+            if (s_Regexs[RegexType.RESOLV_VARIABLE_2].match (ret, RegexMatchFlags.NEWLINE_ANY, out match))
             {
                 unowned Variable? resolv = inGroup.variables.search<string> (match.fetch (3), (v, k) => {
                     return GLib.strcmp (v.name, k);
@@ -246,7 +246,7 @@ public class GVT.Autotools : Backend
         return ret;
     }
 
-    private void
+    private async void
     parse_targets (Group inGroup)
     {
         foreach (unowned Variable variable in inGroup.variables)
@@ -328,7 +328,7 @@ public class GVT.Autotools : Backend
         }
     }
 
-    private void
+    private async void
     parse_datas (Group inGroup)
     {
         foreach (unowned Variable variable in inGroup.variables)
@@ -351,7 +351,7 @@ public class GVT.Autotools : Backend
         }
     }
 
-    private void
+    private async void
     parse_file_am (Group inGroup, string inFilename)
     {
         try
@@ -372,7 +372,7 @@ public class GVT.Autotools : Backend
                         ++cpt;
                     }
                     string filename = string.joinv ("/", paths);
-                    parse_file_am (inGroup, filename);
+                    yield parse_file_am (inGroup, filename);
                     continue;
                 }
 
@@ -465,7 +465,7 @@ public class GVT.Autotools : Backend
         }
     }
 
-    private void
+    private async void
     parse_makefile (Project inProject, string inMakefile)
     {
         if (GLib.Path.get_basename (inMakefile) == "Makefile" &&
@@ -475,9 +475,9 @@ public class GVT.Autotools : Backend
 
             if (groups_name == ".")
             {
-                parse_file_am (inProject, inProject.path + "/Makefile.am");
-                parse_targets (inProject);
-                parse_datas (inProject);
+                yield parse_file_am (inProject, inProject.path + "/Makefile.am");
+                yield parse_targets (inProject);
+                yield parse_datas (inProject);
             }
             else
             {
@@ -501,15 +501,15 @@ public class GVT.Autotools : Backend
                     Group group = new Group (parent, group_name);
                     parent.add (group);
                     setup_filemonitor (group);
-                    parse_file_am (group, group.path + "/Makefile.am");
-                    parse_targets (group);
-                    parse_datas (group);
+                    yield parse_file_am (group, group.path + "/Makefile.am");
+                    yield parse_targets (group);
+                    yield parse_datas (group);
                 }
             }
         }
     }
 
-    private Project?
+    private async Project?
     parse_configure (string inConfigure)
     {
         Project project = null;
@@ -523,14 +523,14 @@ public class GVT.Autotools : Backend
             string name = null;
             string version = null;
 
-            if (c_Regexs[RegexType.AC_INIT_1].match ((string)file.get_contents (), GLib.RegexMatchFlags.NEWLINE_ANY, out match))
+            if (s_Regexs[RegexType.AC_INIT_1].match ((string)file.get_contents (), GLib.RegexMatchFlags.NEWLINE_ANY, out match))
             {
                 name = match.fetch (1);
                 version = match.fetch (2);
             }
             else
             {
-                if (c_Regexs[RegexType.AC_INIT_2].match ((string)file.get_contents (), GLib.RegexMatchFlags.NEWLINE_ANY, out match))
+                if (s_Regexs[RegexType.AC_INIT_2].match ((string)file.get_contents (), GLib.RegexMatchFlags.NEWLINE_ANY, out match))
                 {
                     name = match.fetch (1);
                 }
@@ -546,7 +546,7 @@ public class GVT.Autotools : Backend
             var m4defines = new Set<Variable> ();
             m4defines.compare_func = Variable.compare;
 
-            if (c_Regexs[RegexType.M4_DEFINE].match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match))
+            if (s_Regexs[RegexType.M4_DEFINE].match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match))
             {
                 do
                 {
@@ -583,7 +583,7 @@ public class GVT.Autotools : Backend
             project.version = string.joinv (".", vs);
 
             // Extract AC_SUBST variables
-            if (c_Regexs[RegexType.AC_SUBST].match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match))
+            if (s_Regexs[RegexType.AC_SUBST].match ((string)file.get_contents (), RegexMatchFlags.NEWLINE_ANY, out match))
             {
                 do
                 {
@@ -608,10 +608,10 @@ public class GVT.Autotools : Backend
             }
 
             // Extract AC_CONFIG_FILES
-            bool res = c_Regexs[RegexType.AC_CONFIG_FILES].match ((string)file.get_contents (), GLib.RegexMatchFlags.NEWLINE_ANY, out match);
+            bool res = s_Regexs[RegexType.AC_CONFIG_FILES].match ((string)file.get_contents (), GLib.RegexMatchFlags.NEWLINE_ANY, out match);
             if (!res)
             {
-                res = c_Regexs[RegexType.AC_OUTPUT].match ((string)file.get_contents (), GLib.RegexMatchFlags.NEWLINE_ANY, out match);
+                res = s_Regexs[RegexType.AC_OUTPUT].match ((string)file.get_contents (), GLib.RegexMatchFlags.NEWLINE_ANY, out match);
             }
             if (res)
             {
@@ -634,7 +634,7 @@ public class GVT.Autotools : Backend
 
                 foreach (unowned string makefile in sorted_makefiles)
                 {
-                    parse_makefile (project, makefile);
+                    yield parse_makefile (project, makefile);
                 }
             }
         }
@@ -647,7 +647,7 @@ public class GVT.Autotools : Backend
         return project;
     }
 
-    public override Project?
+    public override async Project?
     parse (string inPath)
     {
         Project project = null;
@@ -662,7 +662,7 @@ public class GVT.Autotools : Backend
 
         if (configure != null)
         {
-            project = parse_configure (configure);
+            project = yield parse_configure (configure);
         }
 
         return project;
