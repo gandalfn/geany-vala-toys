@@ -246,7 +246,7 @@ public class GVT.Manager : GLib.Object
                             if (doc == null)
                             {
                                 Geany.TagManager.Workspace.add_object (file);
-                                file.update (true, false, true);
+                                file.update (true, false, false);
                             }
                         }
                     }
@@ -901,7 +901,7 @@ public class GVT.Manager : GLib.Object
                 if (tm_file != null)
                 {
                     debug ("update tag of %s", source.name);
-                    tm_file.update (true, false, true);
+                    tm_file.update (true, false, false);
                 }
             }
         }
