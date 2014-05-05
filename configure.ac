@@ -30,7 +30,7 @@ LIBXML2_REQUIRED=2.7.8
 VALA_REQUIRED=0.18.0
 WEBKIT_REQUIRED=1.8.1
 LIBWNCK_REQUIRED=2.30.0
-GEANY_REQUIRED=1.22
+GEANY_REQUIRED=1.24
 GCONF2_REQUIRED=2.30.0
 
 dnl ****************************************************************************

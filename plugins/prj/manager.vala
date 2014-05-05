@@ -490,12 +490,12 @@ public class GVT.Manager : GLib.Object
         {
             if (inSource.filename != null)
             {
-                Gdk.Pixbuf icon = Manager.detect_type_from_file (inSource.filename).icon;
+                GLib.Icon? icon = Manager.detect_type_from_file (inSource.filename).icon;
                 Gtk.TreeIter iter;
 
                 //debug ("Add source %s in %s", inSource.name, name);
                 m_TreeStore.append (out iter, inIter);
-                m_TreeStore.set (iter, 0, icon, 1, inSource.name, 2, inSource);
+                m_TreeStore.set (iter, 0, Manager.pixbuf_from_icon (icon), 1, inSource.name, 2, inSource);
 
                 if (inSource.filename != null && GLib.FileUtils.test (inSource.filename, GLib.FileTest.EXISTS))
                 {
@@ -516,13 +516,13 @@ public class GVT.Manager : GLib.Object
         {
             if (inData.length == 0)
             {
-                Gdk.Pixbuf icon = Manager.detect_type_from_file (inData.filename).icon;
+                GLib.Icon? icon = Manager.detect_type_from_file (inData.filename).icon;
                 Gtk.TreeIter iter;
                 string name = inData.name;
 
                 //debug ("Add data %s in %s", inData.name, name);
                 m_TreeStore.append (out iter, inIter);
-                m_TreeStore.set (iter, 0, icon, 1, name.length == 0 ? "data" : name, 2, inData);
+                m_TreeStore.set (iter, 0, Manager.pixbuf_from_icon (icon), 1, name.length == 0 ? "data" : name, 2, inData);
             }
             else
             {
@@ -1156,6 +1156,33 @@ public class GVT.Manager : GLib.Object
         if (icon_set != null)
             return icon_set.render_icon(Gtk.Widget.get_default_style (), Gtk.Widget.get_default_direction(),
                                         Gtk.StateType.NORMAL, Gtk.IconSize.MENU, geany_data.main_widgets.window, "");
+        return null;
+    }
+
+    public static inline Gdk.Pixbuf?
+    pixbuf_from_icon(GLib.Icon? inIcon)
+    {
+        Gtk.IconInfo? icon_info = null;
+
+        if (inIcon != null)
+        {
+            icon_info = Gtk.IconTheme.get_default ().lookup_by_gicon (inIcon, 16, 0);
+        }
+        else
+        {
+            icon_info = Gtk.IconTheme.get_default ().lookup_icon ("text-x-generic", 16, 0);
+        }
+        if (icon_info != null)
+        {
+            try
+            {
+                return icon_info.load_icon ();
+            }
+            catch (GLib.Error err)
+            {
+            }
+        }
+
         return null;
     }
 

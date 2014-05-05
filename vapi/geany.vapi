@@ -1330,7 +1330,7 @@ namespace Geany {
 
         public string?                  extension;
         public FiletypeGroupID          group;
-        public Gdk.Pixbuf?              icon;
+        public GLib.Icon?               icon;
         public FiletypeID               id;
         public TagManager.LangType      lang;
         public Filetype                 lexer_filetype;
