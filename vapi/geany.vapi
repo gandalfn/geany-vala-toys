@@ -30,7 +30,6 @@ namespace Geany {
         public string                           data_dir;
         [CCode (cname = "docdir")]
         public string                           doc_dir;
-        public unowned TagManager.Workspace     tm_workspace;
         public Project?                         project;
     }
     /* reviewed */
@@ -612,13 +611,13 @@ namespace Geany {
          * The value can be null if there is no tag manager used for this
          * document.
          */
-        public TagManager.WorkObject? tm_file { /* needs better name? */
+        public TagManager.SourceFile? tm_file { /* needs better name? */
             [CCode (cname = "geany_vala_plugin_document_get_tm_file")]
             get { return _tm_file; }
             [CCode (cname = "geany_vala_plugin_document_set_tm_file")]
             set { _tm_file = value; }
         }
-        [CCode (cname = "tm_file")] unowned TagManager.WorkObject? _tm_file;
+        [CCode (cname = "tm_file")] unowned TagManager.SourceFile? _tm_file;
 
         /**
          * Gets the {@link Gtk.Notebook} page index for this document.
@@ -1932,71 +1931,23 @@ namespace Geany {
     /* reviewed */
     [CCode (cprefix = "TM", lower_case_cprefix = "tm_")]
     namespace TagManager {
-        /* TODO: add TMFileEntry? not sure it's useful */
-        [Compact]
-        [CCode (free_function = "tm_work_object_free")]
-        public class WorkObject {
-            public uint             type;
-            public string           file_name;
-            public string           short_name;
-            public WorkObject?      parent;
-            public time_t           analyze_time;
-            public GLib.PtrArray    tags_array;
-
+        namespace Workspace {
+            public static void add_source_file (SourceFile file);
+            public static void remove_source_file (SourceFile file);
         }
         [Compact]
-        public class Workspace : WorkObject {
-            public GLib.PtrArray    global_tags;
-            public GLib.PtrArray    work_objects;
-
-
-            public static bool      add_object (WorkObject work_object);
-            public static bool      remove_object (WorkObject w, bool do_free, bool update);
-        }
-        [Compact]
-        public class SourceFile : WorkObject {
+        [CCode (free_function = "tm_source_file_free")]
+        public class SourceFile {
             /**
              * Programming language used
              */
-            public LangType     lang;
-            /**
-             * Whether this file should be scanned for tags
-             */
-            public bool         inactive;
+            public LangType lang;
+            public string  file_name;
+            public string  short_name;
 
             /* Methods */
 
-            public SourceFile (string? file_name, bool update, string? name = null);
-            public bool         update (bool force = true, bool recurse = true, bool update_parent = true);
-        }
-        [Compact]
-        public class Project : WorkObject {
-            /**
-             * Top project directory
-             */
-            public string           dir;
-            /**
-             * Extensions for source files (wildcards, NULL terminated)
-             */
-            [CCode (array_length = false, array_null_terminated = true)]
-            public string[]         sources;
-            /**
-             * File patters to ignore
-             */
-            [CCode (array_length = false, array_null_terminated = true)]
-            public string[]         ignore;
-            /**
-             * Array of {@link TagManager.SourceFile}s present in the project
-             */
-            public GLib.PtrArray    file_list;
-
-            public Project (string dir, [CCode (array_length = false, array_null_terminated = true)]owned string[]? sources,
-                            [CCode (array_length = false, array_null_terminated = true)]owned string[]? ignore, bool force);
-            public bool save ();
-            public bool add_file (string filename, bool update);
-            public unowned WorkObject? find_file (string filename, bool name_only);
-            public void remove_object (WorkObject object);
-            public bool update (bool force = true, bool recurse = true, bool update_parent = true);
+            public SourceFile (string? file_name, string? name = null);
         }
         [SimpleType]
         [IntegerType]

@@ -245,8 +245,7 @@ public class GVT.Manager : GLib.Object
                             unowned Geany.Document? doc = Geany.Document.find_by_filename (file.file_name);
                             if (doc == null)
                             {
-                                Geany.TagManager.Workspace.add_object (file);
-                                file.update (true, false, false);
+                                Geany.TagManager.Workspace.add_source_file (file);
                             }
                         }
                     }
@@ -258,7 +257,7 @@ public class GVT.Manager : GLib.Object
                             unowned Geany.Document? doc = Geany.Document.find_by_filename (file.file_name);
                             if (doc == null)
                             {
-                                Geany.TagManager.Workspace.remove_object (file, false, false);
+                                Geany.TagManager.Workspace.remove_source_file (file);
                             }
                         }
                     }
@@ -499,7 +498,7 @@ public class GVT.Manager : GLib.Object
 
                 if (inSource.filename != null && GLib.FileUtils.test (inSource.filename, GLib.FileTest.EXISTS))
                 {
-                    m_TmFiles += new Geany.TagManager.SourceFile (inSource.filename, true, inSource.file_type.name);
+                    m_TmFiles += new Geany.TagManager.SourceFile (inSource.filename, inSource.file_type.name);
                     if (m_TmFiles [m_TmFiles.length - 1] != null)
                     {
                         unowned Geany.TagManager.SourceFile tm_file = m_TmFiles [m_TmFiles.length - 1];
@@ -684,7 +683,7 @@ public class GVT.Manager : GLib.Object
             m_TreeStore.remove (ref root);
             foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
             {
-                Geany.TagManager.Workspace.remove_object (file, false, true);
+                Geany.TagManager.Workspace.remove_source_file (file);
             }
             m_Project = null;
         }
@@ -785,10 +784,6 @@ public class GVT.Manager : GLib.Object
                 if (m_GlobalPrefs.build_job > 1)
                     params = "-j%i".printf (m_GlobalPrefs.build_job);
 
-                string working_path = inGroup.path;
-                geany_data.build_info.group = Geany.BuildType.MAKE_ALL.to_build_group ();
-                geany_data.build_info.dir = working_path;
-                geany_data.build_info.file_type_id = Geany.FiletypeID.MAKE;
                 s_CommandLaunched = m_Autotools.build (inGroup.path, params);
                 if (s_CommandLaunched)
                 {
@@ -813,10 +808,6 @@ public class GVT.Manager : GLib.Object
                     params = "-j%i".printf (m_GlobalPrefs.build_job);
 
                 params += " " + inTarget.name;
-                string working_path = group.path;
-                geany_data.build_info.group = Geany.BuildType.CUSTOM.to_build_group ();
-                geany_data.build_info.dir = working_path;
-                geany_data.build_info.file_type_id = Geany.FiletypeID.MAKE;
                 s_CommandLaunched = m_Autotools.build (group.path, params);
                 if (s_CommandLaunched)
                 {
@@ -890,23 +881,6 @@ public class GVT.Manager : GLib.Object
         }
 
         public void
-        update_tag (string inFilename)
-        {
-            string filename= inFilename.substring (m_Project.path.length + 1);
-            unowned Item? item = m_Project.find_path (filename);
-            if (item != null && item is Source)
-            {
-                unowned Source? source = (Source?)item;
-                unowned Geany.TagManager.SourceFile? tm_file = source.get_data<unowned Geany.TagManager.SourceFile> ("tm-file");
-                if (tm_file != null)
-                {
-                    debug ("update tag of %s", source.name);
-                    tm_file.update (true, false, false);
-                }
-            }
-        }
-
-        public void
         add_tag (string inFilename)
         {
             string filename= inFilename.substring (m_Project.path.length + 1);
@@ -918,7 +892,7 @@ public class GVT.Manager : GLib.Object
                 if (tm_file != null)
                 {
                     debug ("add tag of %s", source.name);
-                    Geany.TagManager.Workspace.add_object (tm_file);
+                    Geany.TagManager.Workspace.add_source_file (tm_file);
                 }
             }
         }
@@ -935,7 +909,7 @@ public class GVT.Manager : GLib.Object
                 if (tm_file != null)
                 {
                     debug ("remove tag of %s", source.name);
-                    Geany.TagManager.Workspace.remove_object (tm_file, false, false);
+                    Geany.TagManager.Workspace.remove_source_file (tm_file);
                 }
             }
         }
@@ -1233,8 +1207,6 @@ public class GVT.Manager : GLib.Object
 
         geany_plugin.signal_connect (null, "document-open",     true, (GLib.Callback) on_document_open,     this);
         geany_plugin.signal_connect (null, "document-close",    true, (GLib.Callback) on_document_close,    this);
-        geany_plugin.signal_connect (null, "document-save",     true, (GLib.Callback) on_document_save,     this);
-        geany_plugin.signal_connect (null, "document-reload",   true, (GLib.Callback) on_document_save,     this);
         geany_plugin.signal_connect (null, "document-activate", true, (GLib.Callback) on_document_activate, this);
 
         unowned Geany.KeyGroup key_group = geany_plugin.set_key_group ("GVT Project Manager", GVT.KeyBinding.COUNT);
@@ -1307,24 +1279,6 @@ public class GVT.Manager : GLib.Object
                     else
                         prj.add_tag (filename);
                     prj.remove_open_file (filename);
-                    break;
-                }
-            }
-        }
-    }
-
-    [CCode (instance_pos = -1)]
-    private void
-    on_document_save (GLib.Object inObject, Geany.Document inDocument)
-    {
-        string filename = inDocument.file_name;
-        if (filename != null)
-        {
-            foreach (unowned Prj? prj in m_Projects)
-            {
-                if (filename.has_prefix (prj.path + "/"))
-                {
-                    prj.update_tag (filename);
                     break;
                 }
             }
