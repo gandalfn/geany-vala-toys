@@ -240,26 +240,22 @@ public class GVT.Manager : GLib.Object
                     if (m_Active)
                     {
                         debug ("set %s active", name);
+                        GLib.PtrArray files = new GLib.PtrArray ();
                         foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
                         {
-                            unowned Geany.Document? doc = Geany.Document.find_by_filename (file.file_name);
-                            if (doc == null)
-                            {
-                                Geany.TagManager.Workspace.add_source_file (file);
-                            }
+                            files.add (file);
                         }
+                        Geany.TagManager.Workspace.add_source_files (files);
                     }
                     else
                     {
                         debug ("set %s inactive", name);
+                        GLib.PtrArray files = new GLib.PtrArray ();
                         foreach (unowned Geany.TagManager.SourceFile file in m_TmFiles)
                         {
-                            unowned Geany.Document? doc = Geany.Document.find_by_filename (file.file_name);
-                            if (doc == null)
-                            {
-                                Geany.TagManager.Workspace.remove_source_file (file);
-                            }
+                            files.add (file);
                         }
+                        Geany.TagManager.Workspace.remove_source_files (files);
                     }
                 }
             }
@@ -1198,10 +1194,13 @@ public class GVT.Manager : GLib.Object
         {
             foreach (string project in m_GlobalPrefs.current_projects)
             {
-                Prj prj = new Prj (this, project);
-                prj.load.begin (() => {
-                    m_Projects.insert (prj);
-                });
+                if (project.length > 0)
+                {
+                    Prj prj = new Prj (this, project);
+                    prj.load.begin (() => {
+                        m_Projects.insert (prj);
+                    });
+                }
             }
         }
 
@@ -1492,7 +1491,7 @@ public class GVT.Manager : GLib.Object
                     menu_execute.activate.connect (() => {
                         Geany.MessageWindow.switch_tab (Geany.MessageWindow.TabID.VTE, true);
                         // TODO: need to be exposed in geanyfunctions.h
-                        Geany.Vte.send_cmd (target.filename + "\n");
+                        //Geany.Vte.send_cmd (target.filename + "\n");
                     });
                 }
             }
@@ -1512,7 +1511,7 @@ public class GVT.Manager : GLib.Object
                 menu_cwd.activate.connect (() => {
                     Geany.MessageWindow.switch_tab (Geany.MessageWindow.TabID.VTE, true);
                     // TODO: need to be exposed in geanyfunctions.h
-                    Geany.Vte.cwd (group.path, true);
+                    //Geany.Vte.cwd (group.path, true);
                 });
             }
 
@@ -1874,8 +1873,7 @@ public class GVT.Manager : GLib.Object
             {
                 if (filename.has_prefix (prj.path + "/"))
                 {
-                    // TODO: need to be exposed in geanyfunctions.h
-                    string? sel = document.editor.get_default_selection (true);
+                    string? sel = document.editor.scintilla.get_selection_contents ();
 
                     debug ("Launch find in project %s", prj.name);
 

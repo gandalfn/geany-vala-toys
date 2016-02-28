@@ -321,6 +321,52 @@ public class GVT.Autotools : Backend
                             }
                         }
 
+                        unowned Variable? var_flags = inGroup.variables.search<string> (name + "_VALAFLAGS", (v, k) => {
+                            return GLib.strcmp (v.name, k);
+                        });
+                        if (var_flags != null)
+                        {
+                            string[] vapi_dirs = {};
+                            string[] vapis = {};
+
+                            bool vapi = false;
+                            bool vapi_dir = false;
+                            string[] flags = var_flags.val.split (" ");
+                            foreach (unowned string flag in flags)
+                            {
+                                var flag_val = flag.strip ();
+                                if (flag_val.length > 0)
+                                {
+                                    if (flag_val.has_prefix ("--vapidir"))
+                                    {
+                                        vapi_dir = true;
+                                        if ("=" in flag_val)
+                                        {
+                                            vapi_dirs += flag_val.substring (flag_val.index_of ("=") + 1);
+                                            vapi_dir = false;
+                                        }
+                                    }
+                                    if (flag_val.has_prefix ("--pkg"))
+                                    {
+                                        vapi = true;
+                                        if ("=" in flag_val)
+                                        {
+                                            vapis += flag_val.substring (flag_val.index_of ("=") + 1);
+                                            vapi = false;
+                                        }
+                                    }
+                                    if (vapi_dir)
+                                    {
+                                        vapi_dirs += flag_val;
+                                    }
+                                    if (vapi)
+                                    {
+                                        vapis += flag_val;
+                                    }
+                                }
+                            }
+                        }
+
                         inGroup.add (trg);
                     }
                 }

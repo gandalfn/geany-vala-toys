@@ -1933,7 +1933,9 @@ namespace Geany {
     namespace TagManager {
         namespace Workspace {
             public static void add_source_file (SourceFile file);
+            public static void add_source_files (GLib.PtrArray files);
             public static void remove_source_file (SourceFile file);
+            public static void remove_source_files (GLib.PtrArray files);
         }
         [Compact]
         [CCode (free_function = "tm_source_file_free")]
